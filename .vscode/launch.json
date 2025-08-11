@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: pytest",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/symbol_table.py",
+      "console": "integratedTerminal",
+      "args": ["-m", "pytest", "--disable-warnings", "--maxfail=1"]
+    }
+  ]
+}

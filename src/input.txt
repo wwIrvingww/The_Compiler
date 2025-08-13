@@ -1,2 +1,4 @@
-test = 1;
-```~
+let a: integer = 1;
+let b = 2;
+a = a + b * 3;
+print(a);

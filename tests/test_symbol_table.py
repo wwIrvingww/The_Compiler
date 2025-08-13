@@ -1,7 +1,7 @@
 # tests/test_symbol_table.py
 
 import pytest
-from src.symbol_table import Symbol, SymbolTable
+from symbol_table.symbol_table import Symbol, SymbolTable
 
 def test_define_and_lookup_global():
     st = SymbolTable()

@@ -1,0 +1,38 @@
+services:
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: the-compiler-dev
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/app
+      - pip-cache:/root/.local
+    working_dir: /app
+    command: /bin/bash
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: the-compiler-test
+    working_dir: /app
+    environment:
+      - PYTHONPATH=/app/src
+    volumes:
+      - ./src:/app/src:ro
+      - ./tests:/app/tests:ro
+    command: pytest ./tests
+    depends_on:
+      - dev
+  prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: the-compiler-prod
+    working_dir: /app
+    command: python service.py
+    restart: unless-stopped
+
+volumes:
+  pip-cache:

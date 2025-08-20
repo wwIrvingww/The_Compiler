@@ -6,7 +6,8 @@
 ### 0. Servicios:
 Este proyecto utiliza docker-compose para definir 3 servicios diferentes que van a hacer uso de un mismo Dockerfile y compartiran informacion cuando le sea mas oportuno. Asimismo, compose facilita bastante estandarizar un ambiente de desarrollo, testing y produccion asi como tambien correrlos.
 ### 1. Desarrollo
-  - Construccion
+  - Construccion <br>
+  Es importante construir el compose en una red libre de restricciones de certificados HTTPS, de lo contrario, la descarga de paquetes fallará.
 ```
 docker-compose build dev
 ```
@@ -17,7 +18,7 @@ docker-compose run dev
 Esto abre una terminal con el contenido local para poder desarrollar y ejecutar comandos libremente
 
 ### 2. Testing
-  - Construccion
+  - Construccion <br>
 Hay 2 opciones para construir. la opcion 1 es cuando hacemos un pull o estmos rehaciendo la imagen desde 0. En ese caso, podemos usar este comando.
 ```
 docker-compose build test
@@ -26,7 +27,7 @@ Si posiblemete solo hicimos algun tipo de cambio o redireccion que no lo esta ag
 ```
 docker-compose run --rm test
 ```
-  - Correr
+  - Correr <br>
 Esto correra automaticamente los tests en la carpeta "./tests".
 ```
 docker-compose run test

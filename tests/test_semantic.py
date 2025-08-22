@@ -3,7 +3,7 @@ import pytest
 from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
 from CompiscriptLexer import CompiscriptLexer
 from CompiscriptParser import CompiscriptParser
-from semantic import AstAndSemantic
+from ast_and_semantic import AstAndSemantic
 
 
 def run_semantic(code: str):

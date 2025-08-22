@@ -1,7 +1,7 @@
 # tests/test_symbol_table_flowinfo.py
 
 import pytest
-from src.symbol_table import Symbol, SymbolTable
+from symbol_table import Symbol, SymbolTable
 
 def test_define_in_if_has_flow_context():
     st = SymbolTable()

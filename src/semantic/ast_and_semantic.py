@@ -1,6 +1,6 @@
 from antlr4 import ParseTreeWalker
-from CompiscriptListener import CompiscriptListener
-from CompiscriptParser import CompiscriptParser
+from parser.CompiscriptParser import CompiscriptParser
+from parser.CompiscriptListener import CompiscriptListener
 from typing import Optional, List, Dict, Any
 from symbol_table.symbol_table import Symbol, SymbolTable
 from ast_nodes import *
@@ -187,6 +187,7 @@ class AstAndSemantic(CompiscriptListener):
         else:
             node = Literal(value=None, ty=ERROR)
 
+        print(node)
         self.ast[ctx] = node
         self.types[ctx] = node.ty
 
@@ -231,13 +232,17 @@ class AstAndSemantic(CompiscriptListener):
         ty = unify_bin(op_text, lt, rt)
         return BinaryOp(op=op_text, left=l, right=r, ty=ty), ty
 
+########
     def exitMultiplicativeExpr(self, ctx: CompiscriptParser.MultiplicativeExprContext):
-        if len(ctx.unaryExpr()) == 1:
+        if len(ctx.unaryExpr()) == 1:            
             sub = ctx.unaryExpr(0)
-            self.ast[ctx] = self.ast.get(sub); self.types[ctx] = self.types.get(sub, ERROR)
+            self.ast[ctx] = self.ast.get(sub)
+            self.types[ctx] = self.types.get(sub, ERROR)
             return
         op = ctx.getChild(1).getText()
         node, ty = self._bin2(ctx.unaryExpr(0), ctx.unaryExpr(1), op)
+        if (ty == ERROR):
+            self.errors.append(f"No se puede aplicar {op} a tipos \'{node.left.ty}\' y \'{node.right.ty}\'")
         self.ast[ctx] = node; self.types[ctx] = ty
 
     def exitAdditiveExpr(self, ctx: CompiscriptParser.AdditiveExprContext):
@@ -247,7 +252,34 @@ class AstAndSemantic(CompiscriptListener):
             return
         op = ctx.getChild(1).getText()
         node, ty = self._bin2(ctx.multiplicativeExpr(0), ctx.multiplicativeExpr(1), op)
+        if (ty == ERROR):
+            self.errors.append(f"No se puede aplicar {op} a tipos \'{node.left.ty}\' y \'{node.right.ty}\'")
         self.ast[ctx] = node; self.types[ctx] = ty
+
+    def exitLogicalAndExpr(self, ctx: CompiscriptParser.LogicalAndExprContext):
+        if len(ctx.equalityExpr()) == 1:
+            sub = ctx.equalityExpr(0)
+            self.ast[ctx] = self.ast.get(sub); self.types[ctx] = self.types.get(sub, ERROR)
+            return
+        op = ctx.getChild(1).getText()
+        node, ty = self._bin2(ctx.equalityExpr(0), ctx.equalityExpr(1), op)
+        if (ty == ERROR):
+            self.errors.append(f"No se puede aplicar {op} a tipos \'{node.left.ty}\' y \'{node.right.ty}\'")
+        self.ast[ctx] = node; self.types[ctx] = ty
+
+    def exitLogicalOrExpr(self, ctx: CompiscriptParser.LogicalOrExprContext):
+        if len(ctx.logicalAndExpr()) == 1:
+            sub = ctx.logicalAndExpr(0)
+            self.ast[ctx] = self.ast.get(sub); self.types[ctx] = self.types.get(sub, ERROR)
+            return
+        op = ctx.getChild(1).getText()
+        node, ty = self._bin2(ctx.logicalAndExpr(0), ctx.logicalAndExpr(1), "||")
+        if (ty == ERROR):
+            self.errors.append(f"No se puede aplicar {op} a tipos \'{node.left.ty}\' y \'{node.right.ty}\'")
+        self.ast[ctx] = node; self.types[ctx] = ty
+######
+
+
 
     def exitRelationalExpr(self, ctx: CompiscriptParser.RelationalExprContext):
         if len(ctx.additiveExpr()) == 1:
@@ -265,22 +297,6 @@ class AstAndSemantic(CompiscriptListener):
             return
         op = ctx.getChild(1).getText()
         node, ty = self._bin2(ctx.relationalExpr(0), ctx.relationalExpr(1), op)
-        self.ast[ctx] = node; self.types[ctx] = ty
-
-    def exitLogicalAndExpr(self, ctx: CompiscriptParser.LogicalAndExprContext):
-        if len(ctx.equalityExpr()) == 1:
-            sub = ctx.equalityExpr(0)
-            self.ast[ctx] = self.ast.get(sub); self.types[ctx] = self.types.get(sub, ERROR)
-            return
-        node, ty = self._bin2(ctx.equalityExpr(0), ctx.equalityExpr(1), "&&")
-        self.ast[ctx] = node; self.types[ctx] = ty
-
-    def exitLogicalOrExpr(self, ctx: CompiscriptParser.LogicalOrExprContext):
-        if len(ctx.logicalAndExpr()) == 1:
-            sub = ctx.logicalAndExpr(0)
-            self.ast[ctx] = self.ast.get(sub); self.types[ctx] = self.types.get(sub, ERROR)
-            return
-        node, ty = self._bin2(ctx.logicalAndExpr(0), ctx.logicalAndExpr(1), "||")
         self.ast[ctx] = node; self.types[ctx] = ty
 
     def exitExpression(self, ctx: CompiscriptParser.ExpressionContext):

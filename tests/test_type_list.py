@@ -28,9 +28,9 @@ def test_empty_lists():
     let empty_str : string[] = [];
     """
     errors, program = run_semantic(input)
-    assert program.body[0].ty == "null[]"
-    assert program.body[1].ty == "integer[]"
-    assert program.body[2].ty == "string[]"
+    assert str(program.body[0].ty) == "null[]"
+    assert str(program.body[1].ty) == "integer[]"
+    assert str(program.body[2].ty) == "string[]"
     
     assert errors == [], f"Esperaba sin errores, obtuve: {errors}"
 
@@ -40,17 +40,34 @@ def test_implicit_list_type():
     let implicit_str = ["a", "b", "c"];
     """
     errors, program = run_semantic(input)
-    assert program.body[0].ty == "integer[]"
-    assert program.body[1].ty == "string[]"
+    assert str(program.body[0].ty) == "integer[]"
+    assert str(program.body[1].ty) == "string[]"
     assert errors == [], f"Esperaba sin errores, obtuve: {errors}"
 
 def test_incongruent_list_type():
     input = """
-    let error_int : integer[] = [1,2, "a"]
-    let error_int2 : integer[] = ["a", "b"]
-    let error_str : string[] = ["a", "b", 2]
-    let error_str2 : string[] = [1, 2]
+    let error_int : integer[] = [1,2, "a"];
+    let error_int2 : integer[] = ["a", "b"];
+    let error_str : string[] = ["a", "b", 2];
+    let error_str2 : string[] = [1, 2];
     """
     errors, program = run_semantic(input)
     assert len(errors) == 4
     
+def test_nested_lists_right():
+    input = """
+    let error_int : integer[] = [1];
+    let error_int1 : integer[][] = [[1]];
+    let error_int2 : integer[][][] = [[[1]]];
+    let error_int3 : integer[][][][] = [[[[1]]]];
+    """
+    errors, program = run_semantic(input)
+    assert len(errors) == 0
+    
+def test_nested_lists_fail():
+    input = """
+    let error_int : integer[] = [[1]];
+    let error_int1 : integer[][] = [1];
+    """
+    errors, program = run_semantic(input)
+    assert len(errors) == 2

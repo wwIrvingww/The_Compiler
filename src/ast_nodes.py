@@ -1,28 +1,41 @@
 from dataclasses import dataclass, field, fields, is_dataclass
 from typing import List, Optional, Union, Any, Iterable
 
-Type = str
-INT: Type = "integer"
-BOOL: Type = "boolean"
-STR: Type = "string"
-NULL: Type = "null"
-ERROR: Type = "error"
 
-def type_list(inner_type: str) -> str:
+@dataclass(frozen=True)
+class Type:
+    name: Optional[str] = None
+    element_type: Optional['Type'] = None
+    def __str__(self):
+        if self.element_type:
+            return str(self.element_type)+"[]"
+        return self.name or "undefined"
+
+
+
+INT: Type = Type("integer")
+BOOL: Type = Type("boolean")
+STR: Type = Type("string")
+NULL: Type = Type("null")
+ERROR: Type = Type("error")
+
+def type_list(inner_type: Type) -> Type:
     """
     Return the string representation of an array type.
     Can be nested.
     """
-    return f"{inner_type}[]"
+    arr = Type(element_type=inner_type)
+    return arr
 
-def is_list(type: str) -> bool:
+def is_list(var: Type) -> bool:
     """
     Return if actual value type is a list
     """
-    return type[len(type)-1] == ']' and type[len(type)-2] == '['
+    return var.element_type is not None
+
 @dataclass
 class ASTNode:
-    ty: Type = ERROR
+    ty: Type = field(default_factory=lambda: ERROR)
 
 @dataclass
 class Program(ASTNode):

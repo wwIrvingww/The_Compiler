@@ -18,12 +18,12 @@ def unify_bin(op: str, lt: Type, rt: Type) -> Type:
         return BOOL if lt == BOOL and rt == BOOL else ERROR
     return ERROR
 
-def compatible(expected: Optional[Type], actual: Type) -> bool:
+def compatible(expected: Optional['Type'], actual: Type) -> bool:
     if expected is None:
         return True
     if is_list(expected) and actual == type_list(NULL):
         return True
-    return expected == actual
+    return str(expected)==str(actual)
 
 
 def returnLiteral(lex):
@@ -76,7 +76,12 @@ class AstAndSemantic(CompiscriptListener):
         # Save the declaration type (it can be NONE)
         declared = None
         if ctx.typeAnnotation():
+            
             declared = ctx.typeAnnotation().getText().replace(":", "").strip()
+            if(declared[len(declared)-1] == ']'):
+                declared = Type(element_type=declared[:-2])
+            else:
+                declared = Type(name=declared)
             
         # Get initial value type (if there is one)
         init_node = None
@@ -101,6 +106,10 @@ class AstAndSemantic(CompiscriptListener):
         declared = None
         if ctx.typeAnnotation():
             declared = ctx.typeAnnotation().getText().replace(":", "").strip()
+            if(declared[len(declared)-1] == ']'):
+                declared = Type(element_type=declared[:-2])
+            else:
+                declared = Type(name=declared)
         expr_node = self.ast.get(ctx.expression())
         expr_ty = self.types.get(ctx.expression(), ERROR)
 
@@ -176,6 +185,45 @@ class AstAndSemantic(CompiscriptListener):
         rn = self.ast.get(ctx.expression()) if ctx.expression() else None
         self.ast[ctx] = ReturnStmt(expr=rn, ty=(self.types.get(ctx.expression()) if ctx.expression() else NULL))
 
+    
+    def exitArrayLiteral(self, ctx):
+        elements = []
+        types = []
+        try: 
+            for expr_cntx in ctx.expression():
+                if(expr_cntx.Literal()): 
+                    sub_lex = expr_cntx.getText()
+                    sub_node = returnLiteral(sub_lex)
+                    types.append(sub_node.ty)
+                    elements.append(sub_node)
+        except:
+            for expr_cntx in ctx.expression():
+                sub_node = self.ast.get(expr_cntx)
+                types.append(sub_node.ty)
+                elements.append(sub_node)
+            
+                
+        if (len(elements) == 0): # Empty list init
+            node = ArrayLiteral(elements=[], ty=type_list(NULL))
+
+        else: # Lista inicial si tiene elementos
+            flag = 0
+            last = None
+            current = None
+            for t in types:
+                if(last):
+                    current = t
+                    if(str(last) !=str(t)):
+                        flag = 1
+                        break
+                else:
+                    last = t
+            if(flag == 1):
+                self.errors.append(f"No se puede agrupar tipo \'{last}\' con tipo \'{current}\' en una misma lista")
+            node = ArrayLiteral(elements=elements, ty=type_list(last))    
+        self.ast[ctx] = node
+        self.types[ctx] = node.ty
+    
     def exitLiteralExpr(self, ctx: CompiscriptParser.LiteralExprContext):
         # Caso 1: 'true' | 'false' | 'null'
         text = ctx.getText()
@@ -185,42 +233,15 @@ class AstAndSemantic(CompiscriptListener):
             node = Literal(value=False, ty=BOOL)
         elif text == "null":
             node = Literal(value=None, ty=NULL)
-
         # Caso 2: Literal (IntegerLiteral | StringLiteral)
         elif ctx.Literal():
             lex = ctx.Literal().getText()
             node = returnLiteral(lex)
-
         # Caso 3: arrayLiteral (si decides tiparlo más adelante)
         elif ctx.arrayLiteral():
-            elements = []
-            types = []
-            for expr_cntx in ctx.arrayLiteral().expression():
-                sub_lex = expr_cntx.getText()
-                sub_node = returnLiteral(sub_lex)
-                types.append(sub_node.ty)
-                elements.append(sub_node)
-                
-            if (len(elements) == 0): # Empty list init
-                node = ArrayLiteral(elements=[], ty=type_list(NULL))
-                
-            else: # Lista inicial si tiene elementos
-                flag = 0
-                last = None
-                current = None
-                for t in types:
-                    if(last):
-                        current = t
-                        if(last !=t):
-                            flag = 1
-                            break
-                    else:
-                        last = t
-                if(flag == 1):
-                    self.errors.append(f"No se puede agrupar tipo \'{last}\' con tipo \'{current}\' en una misma lista")
-                node = ArrayLiteral(elements=elements, ty=type_list(last))
-            # De momento no tipamos arrays aquí; propaga el sub-árbol si luego lo construyes
-           
+            arlit = self.ast.get(ctx.arrayLiteral())
+            node = arlit
+
         else:
             node = Literal(value=None, ty=ERROR)
         self.ast[ctx] = node

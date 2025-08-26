@@ -1,7 +1,13 @@
 # The_Compiler
 ## Structure
-```src/``` -> Todo contenido programatico. Si necesitan usar un modulo especifico para algun test, van a tener que hacer una carpeta nueva (como symbol table) que tenga el archivo python y un init vacio (no me pregunten por que)<br>
+```src/``` -> Tiene todo el contenido programatico del parser, las cosas que se generan de antlr asi como los typechekers y todo lo custom
+
+- ```src/parser``` -> aqui va todo lo que genera el antlr cuando lo llamamos, como no son funciones que necesitamos ver o cambiar porque se hacen automaticamente, estan en esta carpeta para evitar que nos molesten
+
+- ```src/semantic``` -> checqueo de tipos y recorrido del ast
+
 ```tests/``` -> todos los tests. Por ahora asi nomas, ya despues podemos ver si los seccionamos en carpetas o algo asi
+
 ## Setting up
 ### 0. Servicios:
 Este proyecto utiliza docker-compose para definir 3 servicios diferentes que van a hacer uso de un mismo Dockerfile y compartiran informacion cuando le sea mas oportuno. Asimismo, compose facilita bastante estandarizar un ambiente de desarrollo, testing y produccion asi como tambien correrlos.
@@ -37,7 +43,18 @@ Se supone que algunos cambios ligeros los puede agarrar bien solo el correr el s
 ### 3. Produccion
 <i>TBD</i>
 
-## Documentacion:
+## Correr
+Una vez ya estamos en el entrypoint de dev, osea al correr el docker compose run dev, nos va a llevar a un directorio de la maquina de docker que se llama #app. Esta es la carpeta actual del repositorio corriendo en docker, y cualquier cambio que se haga se actualiza automaticamente.
+Para compilar el antlr, pueden hacerlo a mano, o tambien pueden correr desde app el sh:
+```
+(compilar antlr desde app):
+scripts/gen_parser.sh
+```
 
+Para ya correr el parser completo, pueden usar tambien este sh, que agarra el archivo "input.cps", nuevamete, todo se corre desde #app
+```
+(desde app):
+scripts/run_parser.sh
+```
 ### Sistema de tipos
 

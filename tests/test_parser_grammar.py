@@ -1,7 +1,7 @@
 import pytest
 from antlr4 import InputStream, CommonTokenStream
-from CompiscriptLexer import CompiscriptLexer
-from CompiscriptParser import CompiscriptParser
+from parser.CompiscriptLexer import CompiscriptLexer
+from parser.CompiscriptParser import CompiscriptParser
 
 
 def parse_code(src: str):

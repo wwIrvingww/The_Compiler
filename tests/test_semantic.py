@@ -1,9 +1,9 @@
 # /tests/test_semantic.py
 import pytest
 from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
-from CompiscriptLexer import CompiscriptLexer
-from CompiscriptParser import CompiscriptParser
-from ast_and_semantic import AstAndSemantic
+from parser.CompiscriptLexer import CompiscriptLexer
+from parser.CompiscriptParser import CompiscriptParser
+from semantic.ast_and_semantic import AstAndSemantic
 
 
 def run_semantic(code: str):

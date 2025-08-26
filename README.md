@@ -36,3 +36,8 @@ Se supone que algunos cambios ligeros los puede agarrar bien solo el correr el s
 
 ### 3. Produccion
 <i>TBD</i>
+
+## Documentacion:
+
+### Sistema de tipos
+

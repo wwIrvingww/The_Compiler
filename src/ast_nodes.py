@@ -8,6 +8,18 @@ STR: Type = "string"
 NULL: Type = "null"
 ERROR: Type = "error"
 
+def type_list(inner_type: str) -> str:
+    """
+    Return the string representation of an array type.
+    Can be nested.
+    """
+    return f"{inner_type}[]"
+
+def is_list(type: str) -> bool:
+    """
+    Return if actual value type is a list
+    """
+    return type[len(type)-1] == ']' and type[len(type)-2] == '['
 @dataclass
 class ASTNode:
     ty: Type = ERROR
@@ -39,6 +51,11 @@ class Identifier(ASTNode):
 @dataclass
 class Literal(ASTNode):
     value: Union[int, bool, str, None] = None
+    
+@dataclass
+class ArrayLiteral(ASTNode):
+    ty: Type = ERROR
+    elements: List['ASTNode'] = field(default_factory=list)
 
 @dataclass
 class UnaryOp(ASTNode):
@@ -91,6 +108,10 @@ def _label(n: ASTNode) -> str:
     if isinstance(n, UnaryOp):     return f"UnaryOp '{n.op}' ty={n.ty}"
     if isinstance(n, Identifier):  return f"Identifier {n.name} ty={n.ty}"
     if isinstance(n, Literal):     return f"Literal {repr(n.value)} ty={n.ty}"
+    if isinstance(n, ArrayLiteral):     
+        return f"ArrayLiteral elements={
+            [el.ty for el in n.elements]
+        }"
     if isinstance(n, PrintStmt):   return "PrintStmt"
     if isinstance(n, IfStmt):      return "IfStmt"
     if isinstance(n, WhileStmt):   return "WhileStmt"

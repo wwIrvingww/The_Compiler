@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     git \
+    graphviz \
     && rm -rf /var/lib/apt/lists/*
 
 # Install ANTLR4
@@ -31,6 +32,9 @@ RUN pip install --upgrade pip
 
 # Install some useful dev pip packages
 RUN pip install ipython black mypy pylint pytest
+
+# Install graphviz for AST visualization image
+RUN pip install graphviz
 
 # Set working directory
 WORKDIR /app

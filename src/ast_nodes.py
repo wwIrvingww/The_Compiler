@@ -115,7 +115,7 @@ def _label(n: ASTNode) -> str:
     # Etiquetas girlie pop por tipo
     if isinstance(n, Program):     return "Program"
     if isinstance(n, Block):       return "Block"
-    if isinstance(n, VarDecl):     return f"VarDecl name={n.name} const={n.is_const} declared={n.declared_type} ty={n.ty}"
+    if isinstance(n, VarDecl): declared = f"{n.declared_type}" if n.declared_type else "—"; inferred = f"{n.ty}"; return f"VarDecl name={n.name} const={n.is_const} declared={declared} ty={inferred}" #cuando declared is None mejor rotular inferred=integer en la etiqueta para más slay
     if isinstance(n, Assign):      return f"Assign {n.name} ty={n.ty}"
     if isinstance(n, BinaryOp):    return f"BinaryOp '{n.op}' ty={n.ty}"
     if isinstance(n, UnaryOp):     return f"UnaryOp '{n.op}' ty={n.ty}"
@@ -142,3 +142,75 @@ def render_ascii(root: ASTNode) -> str:
             dfs(ch, prefix + ("   " if is_last else "│  "), last)
     dfs(root)
     return "\n".join(lines)
+
+def create_tree_image(root: ASTNode, out_basename: str = "ast", fmt: str = "png") -> str:
+    """
+    Genera ast.png/svg usando graphviz si corrió el docker AS HE|SHE SHOULD, si no y solo nos odia 
+    y no le importó nuestro esfuerzo en hacer su vida más fácil, genera un stinky ast.dot.
+    Devuelve la ruta del archivo generado (imagen si hubo, .dot en fallback).
+    """
+    def safe_label(n: ASTNode) -> str:
+        # Reutiliza tu _label pero escapando comillas
+        return _label(n).replace('"', '\\"')
+
+    try:
+        # Camino 1: usar el paquete graphviz + binario 'dot'
+        from graphviz import Digraph
+        g = Digraph("AST", format=fmt)
+        g.attr("graph", rankdir="TB")           # vertical (top->bottom)
+        g.attr("node", shape="box", fontname="Consolas")
+
+        counter = 0
+        def new_id():
+            nonlocal counter
+            counter += 1
+            return f"n{counter}"
+
+        def walk(n: ASTNode) -> str:
+            me = new_id()
+            g.node(me, safe_label(n))
+            for child_name, ch in _iter_children(n):
+                child = walk(ch)
+                g.edge(me, child, label=child_name)
+            return me
+
+        walk(root)
+        # Nota: render lanza si no está el binario 'dot' instalado
+        out_path = g.render(filename=out_basename, cleanup=True)  # crea p.ej. ast.png
+        return out_path
+
+    except Exception as e:
+        # Stinky camino 2 (fallback): escribir DOT puro, usando id(n) como clave (¡no requiere hash!)
+        dot_lines = [
+            'digraph AST {',
+            '  rankdir=TB;',
+            '  node [shape=box fontname="Consolas"];'
+        ]
+        ids = {}
+        counter = 0
+
+        def get_id(n: ASTNode) -> str:
+            nonlocal counter
+            key = id(n)                 # <- clave basada en identidad, siempre hashable
+            if key in ids:
+                return ids[key]
+            counter += 1
+            nid = f"n{counter}"
+            ids[key] = nid
+            return nid
+
+        def walk_text(n: ASTNode):
+            me = get_id(n)
+            dot_lines.append(f'  {me} [label="{safe_label(n)}"];')
+            for _, ch in _iter_children(n):
+                ce = get_id(ch)
+                dot_lines.append(f"  {me} -> {ce};")
+                walk_text(ch)
+
+        walk_text(root)
+        dot_lines.append("}")
+
+        dot_path = out_basename + ".dot"
+        with open(dot_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(dot_lines))
+        return dot_path

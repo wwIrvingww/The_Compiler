@@ -3,7 +3,7 @@ from antlr4 import *
 from parser.CompiscriptLexer import CompiscriptLexer
 from parser.CompiscriptParser import CompiscriptParser
 from semantic.ast_and_semantic import AstAndSemantic
-from ast_nodes import render_ascii
+from ast_nodes import create_tree_image, render_ascii
 
 def main(argv):
     input_stream = FileStream(argv[1], encoding='utf-8')
@@ -25,6 +25,13 @@ def main(argv):
 
     print("\n== AST ==")
     print(render_ascii(sem_listener.program))
+    # Genera imagen (ast.png por defecto) o DOT de fallback
+    try:
+        path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
+        print(f"\n[OK] AST exportado a: {path}")
+    except Exception as e:
+        print(f"\n[WARN] No se pudo exportar imagen: {e}\nSe generó ast.dot (puedes correr `dot -Tpng ast.dot -o ast.png`).")
+
 
 if __name__ == '__main__':
     main(sys.argv)

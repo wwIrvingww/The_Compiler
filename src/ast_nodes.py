@@ -111,6 +111,19 @@ def _iter_children(n: Any) -> Iterable[ASTNode]:
                 if isinstance(c, ASTNode):
                     yield f"{f.name}[{i}]", c
 
+@dataclass
+class FuncDecl(ASTNode):
+    name: str = ""
+    # [(paramName, Type), ...]
+    params: List[tuple] = field(default_factory=list)
+    ret: Optional[Type] = None
+    body: Block = None  # type: ignore
+
+@dataclass
+class Call(ASTNode):
+    callee: Identifier = None  # type: ignore
+    args: List[ASTNode] = field(default_factory=list)
+
 def _label(n: ASTNode) -> str:
     # Etiquetas girlie pop por tipo
     if isinstance(n, Program):     return "Program"
@@ -129,6 +142,10 @@ def _label(n: ASTNode) -> str:
     if isinstance(n, IfStmt):      return "IfStmt"
     if isinstance(n, WhileStmt):   return "WhileStmt"
     if isinstance(n, ReturnStmt):  return "ReturnStmt"
+    if isinstance(n, FuncDecl):
+        ps = ", ".join(f"{p}:{t}" for p, t in n.params)
+        return f"FuncDecl {n.name}({ps}) : {n.ret}"
+    if isinstance(n, Call):        return f"Call {n.callee.name}() ty={n.ty}"
     return type(n).__name__
 
 def render_ascii(root: ASTNode) -> str:

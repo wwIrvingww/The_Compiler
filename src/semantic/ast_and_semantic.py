@@ -33,7 +33,28 @@ def returnLiteral(lex):
     elif lex.isdigit():
         node = Literal(value=int(lex), ty=INT)
     return node
-    
+def _parse_type_text(text: Optional[str]) -> Optional[Type]:
+    if not text:
+        return None
+    t = text.replace(":", "").strip()
+    dims = 0
+    while t.endswith("[]"):
+        t = t[:-2]; dims += 1
+    base = Type(name=t)
+    while dims > 0:
+        base = type_list(base); dims -= 1
+    return base
+
+def _get_type_text_from_ctx(ctx) -> Optional[str]:
+    if hasattr(ctx, "typeAnnotation"):
+        ta = ctx.typeAnnotation()
+        if ta:
+            return ta.getText()
+    if hasattr(ctx, "type_"):  # por si la gramática renombró 'type' a 'type_'
+        t = ctx.type_()
+        if t:
+            return t.getText()
+    return None
     
 class AstAndSemantic(CompiscriptListener):
     def __init__(self):
@@ -43,6 +64,7 @@ class AstAndSemantic(CompiscriptListener):
         self.table = SymbolTable()
         self.program = Program()
         self.const_scopes: List[set] = [set()]
+        self.func_ret_stack: List[Type] = [] #Agregar un stack para validar los returns
 
     def _enter_scope(self):
         self.table.enter_scope()
@@ -75,15 +97,10 @@ class AstAndSemantic(CompiscriptListener):
 
         # Save the declaration type (it can be NONE)
         declared = None
-        if ctx.typeAnnotation():
-            
-            declared = ctx.typeAnnotation().getText().replace(":", "").strip()
-            if(declared[len(declared)-1] == ']'):
-                declared = Type(element_type=declared[:-2])
-            else:
-                declared = Type(name=declared)
-            
-        # Get initial value type (if there is one)
+        ttxt = _get_type_text_from_ctx(ctx)
+        if ttxt:
+            declared = _parse_type_text(ttxt)
+
         init_node = None
         init_ty = NULL
         if ctx.initializer():
@@ -95,7 +112,7 @@ class AstAndSemantic(CompiscriptListener):
             self.errors.append(str(e))
 
         if ctx.initializer() and not compatible(declared, init_ty):
-            self.errors.append(f"Tipo incompatible en inicialización de '{name}': esperado {declared}, obtenido {init_ty}")
+            self.errors.append(f"Tipo incompatible en inicializacion de '{name}': esperado {declared}, obtenido {init_ty}")
 
         node = VarDecl(name=name, is_const=False, declared_type=declared, init=init_node, ty=declared or init_ty or NULL)
         self.ast[ctx] = node
@@ -104,12 +121,10 @@ class AstAndSemantic(CompiscriptListener):
     def exitConstantDeclaration(self, ctx: CompiscriptParser.ConstantDeclarationContext):
         name = ctx.Identifier().getText()
         declared = None
-        if ctx.typeAnnotation():
-            declared = ctx.typeAnnotation().getText().replace(":", "").strip()
-            if(declared[len(declared)-1] == ']'):
-                declared = Type(element_type=declared[:-2])
-            else:
-                declared = Type(name=declared)
+        ttxt = _get_type_text_from_ctx(ctx)
+        if ttxt:
+            declared = _parse_type_text(ttxt)
+
         expr_node = self.ast.get(ctx.expression())
         expr_ty = self.types.get(ctx.expression(), ERROR)
 
@@ -140,7 +155,7 @@ class AstAndSemantic(CompiscriptListener):
         if isinstance(ids, list):
             # ids[-1] sería el nombre de la propiedad; el objeto base está en expr_list[0]
             # Para esta fase básica, deja un error (o WARNING) y sal:
-            self.errors.append("Asignación a propiedad no soportada en esta fase (se implementará con objetos/clases).")
+            self.errors.append("Asignacion a propiedad no soportada en esta fase (se implementara con objetos/clases).")
             # Aun así, registra un nodo Assign placeholder con tipo ERROR:
             self.ast[ctx] = Assign(name="__property__", value=val_node, ty=ERROR)
             return
@@ -159,7 +174,7 @@ class AstAndSemantic(CompiscriptListener):
         if sym is None:
             self.errors.append(f"Identificador no declarado: '{name}'")
         elif var_ty not in (None, NULL, ERROR) and val_ty != ERROR and var_ty != val_ty:
-            self.errors.append(f"Asignación incompatible a '{name}': {var_ty} = {val_ty}")
+            self.errors.append(f"Asignacion incompatible a '{name}': {var_ty} = {val_ty}")
 
         self.ast[ctx] = Assign(name=name, value=val_node, ty=(var_ty if var_ty == val_ty or var_ty in (None, NULL) else ERROR))
 
@@ -170,7 +185,7 @@ class AstAndSemantic(CompiscriptListener):
     def exitIfStatement(self, ctx: CompiscriptParser.IfStatementContext):
         cond_ty = self.types.get(ctx.expression(), ERROR)
         if cond_ty != BOOL:
-            self.errors.append("La condición del if debe ser boolean")
+            self.errors.append("La condicion del if debe ser boolean")
         then_block = self.ast.get(ctx.block(0))
         else_block = self.ast.get(ctx.block(1)) if len(ctx.block()) > 1 else None
         self.ast[ctx] = IfStmt(cond=self.ast.get(ctx.expression()), then_block=then_block, else_block=else_block, ty=NULL)
@@ -178,14 +193,26 @@ class AstAndSemantic(CompiscriptListener):
     def exitWhileStatement(self, ctx: CompiscriptParser.WhileStatementContext):
         cond_ty = self.types.get(ctx.expression(), ERROR)
         if cond_ty != BOOL:
-            self.errors.append("La condición del while debe ser boolean")
+            self.errors.append("La condicion del while debe ser boolean")
         self.ast[ctx] = WhileStmt(cond=self.ast.get(ctx.expression()), body=self.ast.get(ctx.block()), ty=NULL)
 
     def exitReturnStatement(self, ctx: CompiscriptParser.ReturnStatementContext):
-        rn = self.ast.get(ctx.expression()) if ctx.expression() else None
-        self.ast[ctx] = ReturnStmt(expr=rn, ty=(self.types.get(ctx.expression()) if ctx.expression() else NULL))
+        actual_ty = NULL
+        rn = None
+        if ctx.expression():
+            rn = self.ast.get(ctx.expression())
+            actual_ty = self.types.get(ctx.expression(), ERROR)
 
-    
+        if not self.func_ret_stack:
+            line = ctx.start.line
+            self.errors.append(f"[linea {line}] 'return' fuera de funcion")
+            expected = NULL
+        else:
+            expected = self.func_ret_stack[-1]
+            if not compatible(expected, actual_ty):
+                self.errors.append(f"Tipo de retorno incompatible: esperado {expected}, obtenido {actual_ty}")
+
+        self.ast[ctx] = ReturnStmt(expr=rn, ty=actual_ty)
     def exitArrayLiteral(self, ctx):
         elements = []
         types = []
@@ -376,13 +403,26 @@ class AstAndSemantic(CompiscriptListener):
         # leftHandSide: primaryAtom (suffixOp)*
         base_node = self.ast.get(ctx.primaryAtom()); base_ty = self.types.get(ctx.primaryAtom(), ERROR)
         # Para esta fase básica, si hay suffixOp (llamada, indexación, propiedad) marcamos como no soportado
-        if len(ctx.suffixOp()) > 0:
-            self.errors.append("Accesos/calls/indexación no soportados aún en esta fase.")
-            self.ast[ctx] = base_node
-            self.types[ctx] = ERROR
-        else:
+        suffixes = list(ctx.suffixOp())
+        if not suffixes:
             self.ast[ctx] = base_node
             self.types[ctx] = base_ty
+            return
+        # Si hay propiedad o indexación en cualquiera de los sufijos -> aún no soportado
+        txt_all = "".join(s.getText() for s in suffixes)
+        if ("[" in txt_all) or ("." in txt_all):
+            self.errors.append("Accesos/calls/indexacion no soportados aun en esta fase.")
+            self.ast[ctx] = base_node
+            self.types[ctx] = ERROR
+            return 
+        # Sólo sufijos de llamada '()': deja el resultado que ya construyó exitCallExpr
+        node = self.ast.get(ctx)
+        ty   = self.types.get(ctx, ERROR)
+        if node is None:
+            # Fallback: si por cualquier razón exitCallExpr no corrió, deja el base
+            node, ty = base_node, base_ty
+        self.ast[ctx] = node
+        self.types[ctx] = ty
 
     def exitTernaryExpr(self, ctx: CompiscriptParser.TernaryExprContext):
         # conditionalExpr: logicalOrExpr ('?' expression ':' expression)?
@@ -394,7 +434,7 @@ class AstAndSemantic(CompiscriptListener):
             then_ty = self.types.get(ctx.expression(0), ERROR)
             else_ty = self.types.get(ctx.expression(1), ERROR)
             if cond_ty != BOOL:
-                self.errors.append("La condición del operador ternario debe ser boolean")
+                self.errors.append("La condicion del operador ternario debe ser boolean")
             ty = then_ty if then_ty == else_ty else ERROR
             node = self.ast.get(ctx.logicalOrExpr())  # opcional: crear nodo Ternary
 
@@ -451,3 +491,128 @@ class AstAndSemantic(CompiscriptListener):
         except TypeError:
             # firma antigua: define(name, ty)
             self.table.define(name, ty)
+    def enterFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
+        name = ctx.Identifier().getText()
+
+        # Firma: params
+        params = []
+        if ctx.parameters():
+            for pctx in ctx.parameters().parameter():
+                pname = pctx.Identifier().getText()
+                ptxt = _get_type_text_from_ctx(pctx)
+                pty  = _parse_type_text(ptxt) or NULL
+                params.append((pname, pty))
+
+        # Tipo de retorno (opcional)
+        rtxt = _get_type_text_from_ctx(ctx)
+        ret  = _parse_type_text(rtxt) or NULL
+
+        # Define símbolo de función ANTES de su cuerpo (recursión permitida)
+        meta = {
+            "kind": "func",
+            "params": [t for _, t in params],
+            "param_names": [n for n, _ in params],
+            "arity": len(params),
+            "ret": ret,
+        }
+        # Atrapa duplicados en el mismo ámbito
+        try:
+            self._define_symbol(name, ret, metadata=meta)
+        except Exception as e:
+            # deja registro pero NO abortes el walk
+            self.errors.append(str(e))
+
+        # Scope de función + parámetros
+        self._enter_scope()
+        self.func_ret_stack.append(ret)
+        for pname, pty in params:
+            self._define_symbol(pname, pty)
+
+    def exitFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
+        name = ctx.Identifier().getText()
+
+        params = []
+        if ctx.parameters():
+            for pctx in ctx.parameters().parameter():
+                pname = pctx.Identifier().getText()
+                ptxt = _get_type_text_from_ctx(pctx)
+                pty  = _parse_type_text(ptxt) or NULL
+                params.append((pname, pty))
+
+        rtxt = _get_type_text_from_ctx(ctx)
+        ret  = _parse_type_text(rtxt) or NULL
+        body = self.ast.get(ctx.block())
+
+        node = FuncDecl(name=name, params=params, ret=ret, body=body, ty=ret)
+        self.ast[ctx] = node
+
+        self.func_ret_stack.pop()
+        self._exit_scope()
+    
+    def exitCallExpr(self, ctx: CompiscriptParser.CallExprContext):
+        """
+        En esta gramática, CallExpr es sólo el sufijo '(args)'.
+        El callee está en el primaryAtom del LeftHandSide padre.
+        Aquí armamos la Call y la escribimos directamente sobre el LeftHandSide padre.
+        """
+        # 1) Ubicar el LeftHandSide contenedor
+        p = ctx.parentCtx
+        lhs_ctx = None
+        while p is not None:
+            if isinstance(p, CompiscriptParser.LeftHandSideContext):
+                lhs_ctx = p
+                break
+            p = getattr(p, "parentCtx", None)
+
+        # Si por alguna razón no hallamos el LHS, salimos silenciosamente
+        if lhs_ctx is None:
+            return
+
+        # 2) Tomar el callee desde el primaryAtom del LHS (ya resuelto en exitIdentifierExpr)
+        callee_node = self.ast.get(lhs_ctx.primaryAtom())
+        callee_ty   = self.types.get(lhs_ctx.primaryAtom(), ERROR)
+
+        # Sólo soportamos callee como identificador simple por ahora
+        if not isinstance(callee_node, Identifier):
+            # Si hubiese sido algo como obj.m(...), tu política actual es marcar no soportado
+            self.errors.append("Accesos/calls/indexacion no soportados aun en esta fase.")
+            self.ast[lhs_ctx] = callee_node
+            self.types[lhs_ctx] = ERROR
+            return
+
+        fname = callee_node.name
+        sym = self.table.lookup(fname)
+        if sym is None or not getattr(sym, "metadata", None) or sym.metadata.get("kind") != "func":
+            self.errors.append(f"Funcion no declarada: '{fname}'")
+            call_node = Call(callee=callee_node, args=[], ty=ERROR)
+            self.ast[lhs_ctx] = call_node
+            self.types[lhs_ctx] = ERROR
+            return
+
+        # 3) Recolectar argumentos ya tipados
+        arg_nodes, arg_types = [], []
+        if ctx.arguments():
+            for e in ctx.arguments().expression():
+                arg_nodes.append(self.ast.get(e))
+                arg_types.append(self.types.get(e, ERROR))
+
+        meta = sym.metadata
+        expected_n     = meta.get("arity", len(meta.get("params", [])))
+        expected_types = meta.get("params", [])
+        ret            = meta.get("ret", NULL)
+
+        if len(arg_types) != expected_n:
+            self.errors.append(
+                f"Numero de argumentos invalido en llamada a '{fname}': esperado {expected_n}, obtenido {len(arg_types)}"
+            )
+        else:
+            for i, (a, exp) in enumerate(zip(arg_types, expected_types), start=1):
+                if not compatible(exp, a):
+                    self.errors.append(
+                        f"Argumento {i} invalido en llamada a '{fname}': esperado {exp}, obtenido {a}"
+                    )
+
+        # 4) Registrar la llamada como valor del LHS (para que primaryExpr la recoja)
+        call_node = Call(callee=callee_node, args=arg_nodes, ty=ret)
+        self.ast[lhs_ctx] = call_node
+        self.types[lhs_ctx] = ret

@@ -15,7 +15,7 @@ def test_return_fuera_de_funcion():
     tree = parse("return 5;")
     errors = FlowValidator.validate(tree)
     print(errors)
-    assert any("fuera de función" in e for e in errors)
+    assert any("fuera de funcion" in e for e in errors)
 
 def test_return_dentro_de_funcion_ok():
     code = """
@@ -29,17 +29,17 @@ def test_return_dentro_de_funcion_ok():
 def test_if_condicion_no_booleana():
     tree = parse("if (123) { }")
     errors = FlowValidator.validate(tree)
-    assert any("condición de 'if' no es boolean" in e for e in errors)
+    assert any("condicion de 'if' no es boolean" in e for e in errors)
 
 def test_while_condicion_no_booleana():
     tree = parse("while (x) { }")
     errors = FlowValidator.validate(tree)
-    assert any("condición de 'while' no es boolean" in e for e in errors)
+    assert any("condicion de 'while' no es boolean" in e for e in errors)
 
 def test_for_condicion_no_booleana():
     code = "for (; \"hola\"; ) { }"
     errors = FlowValidator.validate(parse(code))
-    assert any("condición de 'for' no es boolean" in e for e in errors)
+    assert any("condicion de 'for' no es boolean" in e for e in errors)
 
 def test_flujo_valido_sin_errores():
     code = """

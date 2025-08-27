@@ -19,7 +19,7 @@ class FlowValidator(CompiscriptVisitor):
         # si no hay función en la pila, es error
         if not self._func_stack:
             line = ctx.start.line
-            self.errors.append(f"[línea {line}] 'return' fuera de función")
+            self.errors.append(f"[linea {line}] 'return' fuera de funcion")
         return self.visitChildren(ctx)
 
     def visitIfStatement(self, ctx):
@@ -28,14 +28,14 @@ class FlowValidator(CompiscriptVisitor):
         text = cond.getText()
         if text not in ("true", "false"):
             line = ctx.start.line
-            self.errors.append(f"[línea {line}] condición de 'if' no es boolean: {text!r}")
+            self.errors.append(f"[linea {line}] condicion de 'if' no es boolean: {text!r}")
         return self.visitChildren(ctx)
 
     def visitWhileStatement(self, ctx):
         text = ctx.expression().getText()
         if text not in ("true", "false"):
             line = ctx.start.line
-            self.errors.append(f"[línea {line}] condición de 'while' no es boolean: {text!r}")
+            self.errors.append(f"[linea {line}] condicion de 'while' no es boolean: {text!r}")
         return self.visitChildren(ctx)
 
     def visitForStatement(self, ctx):
@@ -45,7 +45,7 @@ class FlowValidator(CompiscriptVisitor):
             text = cond_ctx.getText()
             if text not in ("true", "false"):
                 line = cond_ctx.start.line
-                self.errors.append(f"[línea {line}] condición de 'for' no es boolean: {text!r}")
+                self.errors.append(f"[linea {line}] condicion de 'for' no es boolean: {text!r}")
         return self.visitChildren(ctx)
 
     @staticmethod

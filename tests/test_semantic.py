@@ -53,13 +53,13 @@ def test_shadowing_allowed_in_inner_block():
     code = """
     let a: integer = 1;
     {
-        let a: integer = 2;  // redeclaración en bloque anidado: permitido
+        let a: integer = 2;  // redeclaracion en bloque anidado: permitido
         print(a);
     }
     print(a);
     """
     errors, _ = run_semantic(code)
-    assert errors == [], f"Sombras en bloque anidado deberían ser válidas: {errors}"
+    assert errors == [], f"Sombras en bloque anidado deberian ser validas: {errors}"
 
 
 # -----------------------------------
@@ -96,11 +96,10 @@ def test_const_reassignment_forbidden():
 def test_redeclaration_in_same_scope():
     code = """
     let a: integer = 1;
-    let a = 2;  // misma capa: debe marcar redeclaración
+    let a = 2;  // misma capa: debe marcar redeclaracion
     """
     errors, _ = run_semantic(code)
-    assert any("ya está definido en el ámbito actual" in e or "ya esta definido en el ambito actual" in e for e in errors), errors
-
+    assert any("ya está definido en el ambito actual" in e or "ya esta definido en el ambito actual" in e for e in errors), errors
 
 def test_if_and_while_require_boolean_condition():
     code = """
@@ -108,8 +107,8 @@ def test_if_and_while_require_boolean_condition():
     while (2) { }
     """
     errors, _ = run_semantic(code)
-    assert any("La condición del if debe ser boolean" in e for e in errors), errors
-    assert any("La condición del while debe ser boolean" in e for e in errors), errors
+    assert any("La condicion del if debe ser boolean" in e for e in errors), errors
+    assert any("La condicion del while debe ser boolean" in e for e in errors), errors
 
 
 def test_property_assignment_not_supported_yet():
@@ -124,15 +123,15 @@ def test_property_assignment_not_supported_yet():
 def test_access_call_index_not_supported_yet():
     code = """
     let a: integer = 10;
-    print(a[0]);      // indexación aún no soportada
+    print(a[0]);      // indexacion aún no soportada
     """
     errors, _ = run_semantic(code)
     # El mensaje exacto lo pusiste como "Accesos/calls/indexación no soportados aún en esta fase."
-    assert any("no soportados" in e and "indexación" in e for e in errors), errors
+    assert any("no soportados" in e and "indexacion" in e for e in errors), errors
 
 
 def test_ternary_condition_must_be_boolean():
     code = 'let t = 1 ? 2 : 3;'
     errors, _ = run_semantic(code)
     # Si ya renombraste a exitTernaryExpr(...) esto debería aparecer
-    assert any("La condición del operador ternario debe ser boolean" in e for e in errors), errors
+    assert any("La condicion del operador ternario debe ser boolean" in e for e in errors), errors

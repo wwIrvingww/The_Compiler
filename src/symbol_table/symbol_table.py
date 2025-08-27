@@ -28,7 +28,7 @@ class SymbolTable:
     def define(self, symbol: Symbol) -> None:
         scope = self.scopes[-1]
         if symbol.name in scope:
-            raise KeyError(f"'{symbol.name}' ya está definido en el ámbito actual")
+            raise KeyError(f"'{symbol.name}' ya esta definido en el ambito actual")
         if self._flow_stack:
             symbol.metadata['flow_contexts'] = list(self._flow_stack)
         scope[symbol.name] = symbol

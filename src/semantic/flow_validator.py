@@ -2,6 +2,8 @@
 
 from parser.CompiscriptParser import CompiscriptParser
 from parser.CompiscriptVisitor import CompiscriptVisitor
+import re
+
 
 class FlowValidator(CompiscriptVisitor):
     def __init__(self):
@@ -9,9 +11,16 @@ class FlowValidator(CompiscriptVisitor):
         self._func_stack = []
         self.errors = []
 
+        # pila de scopes: cada elemento es un set() de nombres declarados en ese scope
+        # el scope [0] será el global
+        self._scope_stack = [set()]
+
     def visitFunctionDeclaration(self, ctx):
+        # entramos en función: nuevo scope
         self._func_stack.append(True)
+        self._scope_stack.append(set())  # nuevo scope para la función
         self.visitChildren(ctx)
+        self._scope_stack.pop()
         self._func_stack.pop()
         return None
 
@@ -47,6 +56,55 @@ class FlowValidator(CompiscriptVisitor):
                 line = cond_ctx.start.line
                 self.errors.append(f"[linea {line}] condicion de 'for' no es boolean: {text!r}")
         return self.visitChildren(ctx)
+    
+    def visitVariableDeclaration(self, ctx):
+        """
+        Detecta declaraciones del estilo:
+          let a : integer = 5;
+        y añade 'a' al scope actual.
+        """
+        # intentamos extraer el nombre con getText() y regex para ser robustos
+        try:
+            txt = ctx.getText()  # ejemplo: "leta:integer=5;" o "let a : integer = 5;"
+            # buscamos 'let' seguido de identificador
+            m = re.search(r'\blet\s+([A-Za-z_]\w*)', txt)
+            if m:
+                name = m.group(1)
+                # añade al scope actual (tope de la pila)
+                self._scope_stack[-1].add(name)
+        except Exception:
+            # no bloquear la validación por un pequeño fallo de parsing/ctx
+            pass
+
+        return self.visitChildren(ctx)
+
+    def visitAssignment(self, ctx):
+        """
+        Detecta asignaciones tipo: b = 10;
+        Si la variable a la izquierda no está declarada en ningún scope,
+        agrega un error.
+        """
+        try:
+            txt = ctx.getText()  # ejemplo: "b=10;"
+            # capturamos el nombre a la izquierda del '='
+            m = re.match(r'\s*([A-Za-z_]\w*)\s*=', txt)
+            if m:
+                name = m.group(1)
+                # buscar en la pila de scopes (desde tope hacia global)
+                declared = False
+                for s in reversed(self._scope_stack):
+                    if name in s:
+                        declared = True
+                        break
+                if not declared:
+                    # línea aproximada: usamos ctx.start.line si está disponible
+                    line = getattr(ctx.start, "line", 1)
+                    self.errors.append(f"[linea {line}] variable '{name}' no declarada")
+        except Exception:
+            pass
+
+        return self.visitChildren(ctx)
+
 
     @staticmethod
     def validate(tree):

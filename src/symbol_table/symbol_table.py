@@ -1,6 +1,4 @@
-# src/symbol_table.py
-
-from typing import Any, Dict, Optional, List
+from typing import Any, Dict, List, Optional
 
 class Symbol:
     def __init__(self, name: str, sym_type: str, metadata: Optional[Dict[str, Any]] = None):
@@ -15,6 +13,7 @@ class SymbolTable:
     def __init__(self):
         self.scopes: List[Dict[str, Symbol]] = [{}]
         self._flow_stack: List[str] = []
+        self.errors: List[str] = []
 
     def enter_scope(self):
         self.scopes.append({})
@@ -23,15 +22,17 @@ class SymbolTable:
         if len(self.scopes) > 1:
             self.scopes.pop()
         else:
-            raise RuntimeError("Cannot exit global scope")
+            self.errors.append("Cannot exit global scope")
 
-    def define(self, symbol: Symbol) -> None:
+    def define(self, symbol: Symbol) -> bool:
         scope = self.scopes[-1]
         if symbol.name in scope:
-            raise KeyError(f"'{symbol.name}' ya esta definido en el ambito actual")
+            self.errors.append(f"Duplicate declaration of '{symbol.name}' in current scope")
+            return False
         if self._flow_stack:
             symbol.metadata['flow_contexts'] = list(self._flow_stack)
         scope[symbol.name] = symbol
+        return True
 
     def lookup(self, name: str) -> Optional[Symbol]:
         for scope in reversed(self.scopes):
@@ -44,5 +45,12 @@ class SymbolTable:
 
     def exit_flow(self):
         if not self._flow_stack:
-            raise RuntimeError("No hay contexto de flujo para salir")
-        self._flow_stack.pop()
+            self.errors.append("No flow context to exit")
+        else:
+            self._flow_stack.pop()
+
+    def get_errors(self) -> List[str]:
+        return list(self.errors)
+
+    def clear_errors(self):
+        self.errors.clear()

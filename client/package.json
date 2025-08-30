@@ -1,0 +1,51 @@
+{
+  "name": "compiscript-vscode",
+  "displayName": "Compiscript",
+  "publisher": "you",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.70.0"
+  },
+  "activationEvents": [
+    "onLanguage:compiscript"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "compiscript",
+        "aliases": [
+          "Compiscript",
+          "compiscript"
+        ],
+        "extensions": [
+          ".cps"
+        ]
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Compiscript",
+      "properties": {
+        "compiscript.pythonPath": {
+          "type": "string",
+          "default": "",
+          "description": "Ruta al ejecutable Python para el servidor LSP (ej: python o C:\\Python\\python.exe). Si está vacío se usa 'python' en Windows o 'python3' en Unix."
+        }
+      }
+    }
+  },
+  "main": "./dist/extension.js",
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "tsc -p ./",
+    "watch": "tsc -w -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^8.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/vscode": "^1.70.0",
+    "typescript": "^4.6.4"
+  }
+}

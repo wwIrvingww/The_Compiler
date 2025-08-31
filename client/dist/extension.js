@@ -24,20 +24,34 @@ var __importStar = (this && this.__importStar) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.deactivate = exports.activate = void 0;
+// client/src/extension.ts
+const fs = __importStar(require("fs"));
 const path = __importStar(require("path"));
 const vscode = __importStar(require("vscode"));
 const node_1 = require("vscode-languageclient/node");
 let client;
-function getPythonCmd() {
+function getPythonCmd(context) {
     const config = vscode.workspace.getConfiguration('compiscript');
     const configured = config.get('pythonPath');
     if (configured && configured.length > 0)
         return configured;
+    // intenta el .venv al nivel del repo (context.extensionPath apunta al folder 'client' en desarrollo)
+    const repoRoot = path.resolve(context.extensionPath, '..');
+    const venvDir = path.join(repoRoot, '.venv');
+    if (fs.existsSync(venvDir)) {
+        const pyPathWin = path.join(venvDir, 'Scripts', 'python.exe');
+        const pyPathNix = path.join(venvDir, 'bin', 'python');
+        if (process.platform === 'win32' && fs.existsSync(pyPathWin))
+            return pyPathWin;
+        if (process.platform !== 'win32' && fs.existsSync(pyPathNix))
+            return pyPathNix;
+    }
+    // fallback
     return process.platform === 'win32' ? 'python' : 'python3';
 }
 function activate(context) {
     const serverModule = context.asAbsolutePath(path.join('..', 'server', 'server.py'));
-    const pythonCmd = getPythonCmd();
+    const pythonCmd = getPythonCmd(context);
     const serverOptions = {
         run: { command: pythonCmd, args: [serverModule], transport: node_1.TransportKind.stdio },
         debug: { command: pythonCmd, args: [serverModule, '--debug'], transport: node_1.TransportKind.stdio }
@@ -49,19 +63,15 @@ function activate(context) {
         }
     };
     client = new node_1.LanguageClient('compiscriptLS', 'Compiscript Language Server', serverOptions, clientOptions);
-    // start devuelve Thenable<void>, así que llamamos start() y registramos un disposable
     client.start();
-    // Registramos un disposable que detiene el cliente cuando la extensión se desactiva
     const stopDisposable = {
         dispose: () => {
             if (client) {
-                // stop devuelve Thenable<void>, esto es aceptable dentro de dispose
                 client.stop();
             }
         }
     };
     context.subscriptions.push(stopDisposable);
-    // Command: run compile (simple)
     const compileCmd = vscode.commands.registerCommand('compiscript.compileFile', async () => {
         const editor = vscode.window.activeTextEditor;
         if (!editor)

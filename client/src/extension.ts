@@ -1,19 +1,33 @@
+// client/src/extension.ts
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { LanguageClient, TransportKind, LanguageClientOptions, ServerOptions } from 'vscode-languageclient/node';
 
 let client: LanguageClient | undefined;
 
-function getPythonCmd(): string {
+function getPythonCmd(context: vscode.ExtensionContext): string {
   const config = vscode.workspace.getConfiguration('compiscript');
   const configured = config.get<string>('pythonPath');
   if (configured && configured.length > 0) return configured;
+
+  // intenta el .venv al nivel del repo (context.extensionPath apunta al folder 'client' en desarrollo)
+  const repoRoot = path.resolve(context.extensionPath, '..');
+  const venvDir = path.join(repoRoot, '.venv');
+  if (fs.existsSync(venvDir)) {
+    const pyPathWin = path.join(venvDir, 'Scripts', 'python.exe');
+    const pyPathNix = path.join(venvDir, 'bin', 'python');
+    if (process.platform === 'win32' && fs.existsSync(pyPathWin)) return pyPathWin;
+    if (process.platform !== 'win32' && fs.existsSync(pyPathNix)) return pyPathNix;
+  }
+
+  // fallback
   return process.platform === 'win32' ? 'python' : 'python3';
 }
 
 export function activate(context: vscode.ExtensionContext) {
   const serverModule = context.asAbsolutePath(path.join('..','server','server.py'));
-  const pythonCmd = getPythonCmd();
+  const pythonCmd = getPythonCmd(context);
 
   const serverOptions: ServerOptions = {
     run:   { command: pythonCmd, args: [serverModule], transport: TransportKind.stdio },
@@ -29,21 +43,17 @@ export function activate(context: vscode.ExtensionContext) {
 
   client = new LanguageClient('compiscriptLS', 'Compiscript Language Server', serverOptions, clientOptions);
 
-  // start devuelve Thenable<void>, así que llamamos start() y registramos un disposable
   client.start();
 
-  // Registramos un disposable que detiene el cliente cuando la extensión se desactiva
   const stopDisposable = {
     dispose: () => {
       if (client) {
-        // stop devuelve Thenable<void>, esto es aceptable dentro de dispose
         client.stop();
       }
     }
   };
   context.subscriptions.push(stopDisposable);
 
-  // Command: run compile (simple)
   const compileCmd = vscode.commands.registerCommand('compiscript.compileFile', async () => {
     const editor = vscode.window.activeTextEditor;
     if (!editor) return vscode.window.showInformationMessage('Open a Compiscript file first.');

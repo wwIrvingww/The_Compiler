@@ -2,8 +2,6 @@
 
 from parser.CompiscriptParser import CompiscriptParser
 from parser.CompiscriptVisitor import CompiscriptVisitor
-import re
-
 
 class FlowValidator(CompiscriptVisitor):
     def __init__(self):
@@ -56,22 +54,30 @@ class FlowValidator(CompiscriptVisitor):
                 line = cond_ctx.start.line
                 self.errors.append(f"[linea {line}] condicion de 'for' no es boolean: {text!r}")
         return self.visitChildren(ctx)
-    
+
     def visitVariableDeclaration(self, ctx):
         """
         Detecta declaraciones del estilo:
           let a : integer = 5;
         y añade 'a' al scope actual.
         """
-        # intentamos extraer el nombre con getText() y regex para ser robustos
         try:
-            txt = ctx.getText()  # ejemplo: "leta:integer=5;" o "let a : integer = 5;"
-            # buscamos 'let' seguido de identificador
-            m = re.search(r'\blet\s+([A-Za-z_]\w*)', txt)
-            if m:
-                name = m.group(1)
-                # añade al scope actual (tope de la pila)
+            # Preferimos extraer el identificador vía ctx.Identifier() si está disponible.
+            if hasattr(ctx, "Identifier") and ctx.Identifier() is not None:
+                ids = ctx.Identifier()
+                # puede ser una lista (en ciertos nodos de ANTLR) o un único token
+                if isinstance(ids, list):
+                    # por convención el primer Identifier suele ser el nombre
+                    name = ids[0].getText()
+                else:
+                    name = ids.getText()
                 self._scope_stack[-1].add(name)
+            else:
+                # fallback simple (muy raro): usa getText y extrae con split
+                txt = ctx.getText()
+                parts = txt.replace(";", " ").split()
+                if len(parts) >= 2 and parts[0].startswith("let"):
+                    self._scope_stack[-1].add(parts[1])
         except Exception:
             # no bloquear la validación por un pequeño fallo de parsing/ctx
             pass
@@ -85,26 +91,37 @@ class FlowValidator(CompiscriptVisitor):
         agrega un error.
         """
         try:
-            txt = ctx.getText()  # ejemplo: "b=10;"
-            # capturamos el nombre a la izquierda del '='
-            m = re.match(r'\s*([A-Za-z_]\w*)\s*=', txt)
-            if m:
-                name = m.group(1)
-                # buscar en la pila de scopes (desde tope hacia global)
+            # Preferimos extraer el identificador directamente desde ctx
+            name = None
+            if hasattr(ctx, "Identifier") and ctx.Identifier() is not None:
+                ids = ctx.Identifier()
+                if isinstance(ids, list):
+                    # si es lista: en casos complejos (propiedades) cogen el último o el primero
+                    name = ids[0].getText()
+                else:
+                    name = ids.getText()
+            else:
+                # fallback: intentar obtener de la forma 'X ='
+                txt = ctx.getText()
+                parts = txt.split("=")
+                if parts:
+                    left = parts[0].strip()
+                    # el primer token es el identificador
+                    name = left.split()[0] if left.split() else None
+
+            if name:
                 declared = False
                 for s in reversed(self._scope_stack):
                     if name in s:
                         declared = True
                         break
                 if not declared:
-                    # línea aproximada: usamos ctx.start.line si está disponible
                     line = getattr(ctx.start, "line", 1)
                     self.errors.append(f"[linea {line}] variable '{name}' no declarada")
         except Exception:
             pass
 
         return self.visitChildren(ctx)
-
 
     @staticmethod
     def validate(tree):

@@ -481,16 +481,53 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = node
         self.types[ctx] = self.types.get(ctx.expression(), ERROR)
 
-    def _define_symbol(self, name, ty, metadata=None):
+    def _define_symbol(self, name_or_symbol, ty=None, metadata=None):
         """
-        Intenta usar define(Symbol(...)). Si tu tabla fuera antigua (define(name, ty)),
-        hace fallback automático.
+        Wrapper que intenta definir un símbolo en la tabla:
+        - acepta ambas firmas: Symbol(...) o (name, type)
+        - captura KeyError o retorno False y añade al self.errors un mensaje en español
+        con la frase que los tests de semántica esperan:
+        "'<name>' ya está definido en el ambito actual" (incluye nombre).
         """
         try:
-            self.table.define(Symbol(name, ty, metadata or {}))
+            # si le pasaron name + type, usamos la firma flexible
+            if isinstance(name_or_symbol, str):
+                # name_or_symbol == name, ty == type
+                ok = self.table.define(name_or_symbol, ty, metadata or {})
+            else:
+                # asumimos que es un Symbol object
+                ok = self.table.define(name_or_symbol)
+
+            # en caso de que la implementación devuelva False (alguna versión antigua)
+            if ok is False:
+                nm = name_or_symbol if isinstance(name_or_symbol, str) else getattr(name_or_symbol, "name", "??")
+                self.errors.append(f"'{nm}' ya está definido en el ambito actual")
+
+        except KeyError as ke:
+            # la SymbolTable ya registró (en inglés) el error; aquí añadimos la versión en español
+            # para que los tests de semántica lo vean
+            msg = ke.args[0] if ke.args else str(ke)
+            nm = None
+            if isinstance(msg, str):
+                import re
+                m = re.search(r"'([^']+)'", msg)
+                if m:
+                    nm = m.group(1)
+            if nm is None:
+                nm = name_or_symbol if isinstance(name_or_symbol, str) else getattr(name_or_symbol, "name", "??")
+            self.errors.append(f"'{nm}' ya está definido en el ambito actual")
+
         except TypeError:
-            # firma antigua: define(name, ty)
-            self.table.define(name, ty)
+            # compatibilidad con firma antigua: reintentar con define(name, type)
+            if not isinstance(name_or_symbol, str):
+                nm = getattr(name_or_symbol, "name", None)
+                self.table.define(nm, ty)
+            else:
+                raise
+
+
+
+
     def enterFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
         name = ctx.Identifier().getText()
 

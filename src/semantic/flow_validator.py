@@ -9,9 +9,16 @@ class FlowValidator(CompiscriptVisitor):
         self._func_stack = []
         self.errors = []
 
+        # pila de scopes: cada elemento es un set() de nombres declarados en ese scope
+        # el scope [0] será el global
+        self._scope_stack = [set()]
+
     def visitFunctionDeclaration(self, ctx):
+        # entramos en función: nuevo scope
         self._func_stack.append(True)
+        self._scope_stack.append(set())  # nuevo scope para la función
         self.visitChildren(ctx)
+        self._scope_stack.pop()
         self._func_stack.pop()
         return None
 
@@ -46,6 +53,74 @@ class FlowValidator(CompiscriptVisitor):
             if text not in ("true", "false"):
                 line = cond_ctx.start.line
                 self.errors.append(f"[linea {line}] condicion de 'for' no es boolean: {text!r}")
+        return self.visitChildren(ctx)
+
+    def visitVariableDeclaration(self, ctx):
+        """
+        Detecta declaraciones del estilo:
+          let a : integer = 5;
+        y añade 'a' al scope actual.
+        """
+        try:
+            # Preferimos extraer el identificador vía ctx.Identifier() si está disponible.
+            if hasattr(ctx, "Identifier") and ctx.Identifier() is not None:
+                ids = ctx.Identifier()
+                # puede ser una lista (en ciertos nodos de ANTLR) o un único token
+                if isinstance(ids, list):
+                    # por convención el primer Identifier suele ser el nombre
+                    name = ids[0].getText()
+                else:
+                    name = ids.getText()
+                self._scope_stack[-1].add(name)
+            else:
+                # fallback simple (muy raro): usa getText y extrae con split
+                txt = ctx.getText()
+                parts = txt.replace(";", " ").split()
+                if len(parts) >= 2 and parts[0].startswith("let"):
+                    self._scope_stack[-1].add(parts[1])
+        except Exception:
+            # no bloquear la validación por un pequeño fallo de parsing/ctx
+            pass
+
+        return self.visitChildren(ctx)
+
+    def visitAssignment(self, ctx):
+        """
+        Detecta asignaciones tipo: b = 10;
+        Si la variable a la izquierda no está declarada en ningún scope,
+        agrega un error.
+        """
+        try:
+            # Preferimos extraer el identificador directamente desde ctx
+            name = None
+            if hasattr(ctx, "Identifier") and ctx.Identifier() is not None:
+                ids = ctx.Identifier()
+                if isinstance(ids, list):
+                    # si es lista: en casos complejos (propiedades) cogen el último o el primero
+                    name = ids[0].getText()
+                else:
+                    name = ids.getText()
+            else:
+                # fallback: intentar obtener de la forma 'X ='
+                txt = ctx.getText()
+                parts = txt.split("=")
+                if parts:
+                    left = parts[0].strip()
+                    # el primer token es el identificador
+                    name = left.split()[0] if left.split() else None
+
+            if name:
+                declared = False
+                for s in reversed(self._scope_stack):
+                    if name in s:
+                        declared = True
+                        break
+                if not declared:
+                    line = getattr(ctx.start, "line", 1)
+                    self.errors.append(f"[linea {line}] variable '{name}' no declarada")
+        except Exception:
+            pass
+
         return self.visitChildren(ctx)
 
     @staticmethod

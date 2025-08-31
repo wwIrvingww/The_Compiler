@@ -114,7 +114,7 @@ class AstAndSemantic(CompiscriptListener):
             init_node = self.ast.get(ctx.initializer())
             init_ty = self.types.get(ctx.initializer(), ERROR)
         try:
-            self._define_symbol(name, declared or (init_ty if (init_ty != NULL) else None))
+            self._define_symbol(name, declared or (init_ty if (init_ty != NULL) else None), err_ctx=ctx)
         except Exception as e:
             self.errors.append(str(e))
 
@@ -131,41 +131,81 @@ class AstAndSemantic(CompiscriptListener):
             frame["symbol"].metadata["attributes"] = frame["attributes"]
 
     def exitAssignment(self, ctx: CompiscriptParser.AssignmentContext):
-        # Normaliza expressions a lista y toma RHS (último) como valor a asignar
+        # RHS
         exprs = ctx.expression()
         expr_list = exprs if isinstance(exprs, list) else [exprs]
         rhs_ctx = expr_list[-1]
         val_node = self.ast.get(rhs_ctx)
         val_ty = self.types.get(rhs_ctx, ERROR)
 
-        ids = ctx.Identifier()
+        # Intentar obtener Identifier directamente (si la gramática lo provee)
+        ids = None
+        try:
+            ids_candidate = ctx.Identifier()
+            if ids_candidate:
+                ids = ids_candidate
+        except Exception:
+            ids = None
 
-        # ¿Es asignación a propiedad? (expression '.' Identifier '=' expression)
-        if isinstance(ids, list):
-            # ids[-1] sería el nombre de la propiedad; el objeto base está en expr_list[0]
-            # Para esta fase básica, deja un error (o WARNING) y sal:
-            self.errors.append("Asignacion a propiedad no soportada en esta fase (se implementara con objetos/clases).")
-            # Aun así, registra un nodo Assign placeholder con tipo ERROR:
-            self.ast[ctx] = Assign(name="__property__", value=val_node, ty=ERROR)
+        # Fallback: buscar en leftHandSide -> primaryAtom -> Identifier
+        if not ids:
+            try:
+                if hasattr(ctx, "leftHandSide"):
+                    lh = ctx.leftHandSide()
+                    # leftHandSide() puede devolver lista o un solo nodo
+                    lhs = lh if not isinstance(lh, list) else (lh[0] if lh else None)
+                    if lhs and hasattr(lhs, "primaryAtom") and lhs.primaryAtom():
+                        pa = lhs.primaryAtom()
+                        if hasattr(pa, "Identifier") and pa.Identifier():
+                            ids2 = pa.Identifier()
+                            if ids2:
+                                ids = ids2
+            except Exception:
+                # no bloquear validación si algo falla aquí
+                ids = ids
+
+        # Si aún no encontramos un identifier, salimos (no es asignación simple a variable)
+        if not ids:
             return
 
-        # Alternativa simple: Identifier '=' expression ';'
-        name = ids.getText()
-        sym = self.table.lookup(name)
-        var_ty = ERROR if sym is None else (sym.type or NULL)
+        # Resolver nombre (ids puede ser token o lista)
+        try:
+            if isinstance(ids, list):
+                name = ids[-1].getText() if ids else None
+            else:
+                name = ids.getText()
+        except Exception:
+            name = None
 
-        # ¿es const?
-        for scope_consts in reversed(self.const_scopes):
-            if name in scope_consts:
-                self.errors.append(f"No se puede asignar a const '{name}'")
-                break
+        if not name:
+            return
+
+        # Buscar en la tabla de símbolos
+        sym = self.table.lookup(name)
 
         if sym is None:
-            self.errors.append(f"Identificador no declarado: '{name}'")
-        elif var_ty not in (None, NULL, ERROR) and val_ty != ERROR and var_ty != val_ty:
-            self.errors.append(f"Asignacion incompatible a '{name}': {var_ty} = {val_ty}")
+            # intentar sacar línea del token/ctx
+            line = 1
+            try:
+                # tokens ANTLR: ids.getSymbol().line
+                token = None
+                try:
+                    token = ids.getSymbol()
+                except Exception:
+                    # a veces ids es un Token (no un ctx) con .line
+                    token = getattr(ids, 'symbol', None) or getattr(ids, 'getSymbol', None)
+                if hasattr(token, 'line'):
+                    line = token.line
+                else:
+                    line = getattr(ctx.start, "line", 1)
+            except Exception:
+                line = getattr(ctx.start, "line", 1)
 
-        self.ast[ctx] = Assign(name=name, value=val_node, ty=(var_ty if var_ty == val_ty or var_ty in (None, NULL) else ERROR))
+            self.errors.append(f"[linea {line}] variable '{name}' no declarada")
+
+        # (Opcional) construir nodo AST/typing similar a antes
+        # self.ast[ctx] = Assign(name=name, value=val_node, ty=(sym.type if sym else ERROR))
+
 
     def exitConstantDeclaration(self, ctx: CompiscriptParser.ConstantDeclarationContext):
         name = ctx.Identifier().getText()
@@ -211,18 +251,98 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = PrintStmt(expr=expr_node, ty=NULL)
 
     def exitIfStatement(self, ctx: CompiscriptParser.IfStatementContext):
-        cond_ty = self.types.get(ctx.expression(), ERROR)
-        if cond_ty != BOOL:
-            self.errors.append("La condicion del if debe ser boolean")
-        then_block = self.ast.get(ctx.block(0))
-        else_block = self.ast.get(ctx.block(1)) if len(ctx.block()) > 1 else None
-        self.ast[ctx] = IfStmt(cond=self.ast.get(ctx.expression()), then_block=then_block, else_block=else_block, ty=NULL)
+        # localizar la condición
+        cond_ctx = None
+        try:
+            exprs = ctx.expression()
+            cond_ctx = exprs if not isinstance(exprs, list) else (exprs[0] if exprs else None)
+        except Exception:
+            cond_ctx = None
+
+        if cond_ctx is None:
+            return
+
+        cond_text = cond_ctx.getText()
+        cond_ty = self.types.get(cond_ctx, None)
+
+        try:
+            is_bool = (cond_ty is BOOL)
+        except NameError:
+            is_bool = False
+
+        if not is_bool and cond_text not in ("true", "false"):
+            line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
+            self.errors.append(f"[linea {line}] condicion de 'if' no es boolean: '{cond_text}'")
 
     def exitWhileStatement(self, ctx: CompiscriptParser.WhileStatementContext):
-        cond_ty = self.types.get(ctx.expression(), ERROR)
-        if cond_ty != BOOL:
-            self.errors.append("La condicion del while debe ser boolean")
-        self.ast[ctx] = WhileStmt(cond=self.ast.get(ctx.expression()), body=self.ast.get(ctx.block()), ty=NULL)
+        """
+        Exige que la condición del while sea booleana.
+        Intenta primero con inferencia de tipos; si no hay tipo, cae a literal 'true'/'false'.
+        """
+        cond_ctx = None
+        try:
+            # muchas gramáticas exponen la condición como expression()
+            exprs = ctx.expression()
+            cond_ctx = exprs if not isinstance(exprs, list) else (exprs[0] if exprs else None)
+        except Exception:
+            cond_ctx = None
+
+        if cond_ctx is None:
+            return  # si la gramática no ofrece la condición aquí, no generamos error
+
+        cond_text = cond_ctx.getText()
+        cond_ty = self.types.get(cond_ctx, None)
+
+        # Si tenemos sistema de tipos y BOOL está definido:
+        try:
+            is_bool = (cond_ty is BOOL)
+        except NameError:
+            is_bool = False
+
+        # Fallback literal
+        if not is_bool:
+            if cond_text not in ("true", "false"):
+                line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
+                self.errors.append(f"[linea {line}] condicion de 'while' no es boolean: '{cond_text}'")
+
+
+    def exitForStatement(self, ctx: CompiscriptParser.ForStatementContext):
+        """
+        Exige que la condición del for sea booleana.
+        Soporta for estilo C (init; cond; update) y variantes con una sola expresión entre paréntesis.
+        """
+        cond_ctx = None
+        try:
+            exprs = ctx.expression()
+            if isinstance(exprs, list):
+                # Heurística:
+                # - Si hay 3 expresiones: (init; cond; update) -> cond es la segunda
+                # - Si hay 2 o 1 expresiones, tomamos la primera como condición (caso simple)
+                if len(exprs) >= 3:
+                    cond_ctx = exprs[1]
+                elif len(exprs) >= 1:
+                    cond_ctx = exprs[0]
+            else:
+                cond_ctx = exprs
+        except Exception:
+            cond_ctx = None
+
+        if cond_ctx is None:
+            return
+
+        cond_text = cond_ctx.getText()
+        cond_ty = self.types.get(cond_ctx, None)
+
+        try:
+            is_bool = (cond_ty is BOOL)
+        except NameError:
+            is_bool = False
+
+        if not is_bool:
+            if cond_text not in ("true", "false"):
+                line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
+                self.errors.append(f"[linea {line}] condicion de 'for' no es boolean: '{cond_text}'")
+
 
     def exitReturnStatement(self, ctx: CompiscriptParser.ReturnStatementContext):
         actual_ty = NULL
@@ -650,16 +770,52 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = node
         self.types[ctx] = self.types.get(ctx.expression(), ERROR)
 
-    def _define_symbol(self, name, ty, metadata=None):
+    def _define_symbol(self, name_or_symbol, ty=None, metadata=None, err_ctx=None):
         """
-        Intenta usar define(Symbol(...)). Si tu tabla fuera antigua (define(name, ty)),
-        hace fallback automático.
+        Wrapper que intenta definir un símbolo en la tabla y, si falla,
+        añade un error **con línea** en el formato: [linea N] '<name>' ya está definido en el ambito actual
         """
+        # línea a usar si hay error
+        line = 1
+        if err_ctx is not None:
+            try:
+                line = getattr(err_ctx.start, "line", 1)
+            except Exception:
+                line = 1
+
         try:
-            self.table.define(Symbol(name, ty, metadata or {}))
+            # firma flexible
+            if isinstance(name_or_symbol, str):
+                ok = self.table.define(name_or_symbol, ty, metadata or {})
+            else:
+                ok = self.table.define(name_or_symbol)
+
+            # por compatibilidad si define() devuelve False
+            if ok is False:
+                nm = name_or_symbol if isinstance(name_or_symbol, str) else getattr(name_or_symbol, "name", "??")
+                self.errors.append(f"[linea {line}] '{nm}' ya está definido en el ambito actual")
+
+        except KeyError as ke:
+            # extrae el nombre del mensaje en inglés si viene así
+            msg = ke.args[0] if ke.args else str(ke)
+            nm = None
+            if isinstance(msg, str):
+                import re
+                m = re.search(r"'([^']+)'", msg)
+                if m:
+                    nm = m.group(1)
+            if nm is None:
+                nm = name_or_symbol if isinstance(name_or_symbol, str) else getattr(name_or_symbol, "name", "??")
+            self.errors.append(f"[linea {line}] '{nm}' ya está definido en el ambito actual")
+
         except TypeError:
-            # firma antigua: define(name, ty)
-            self.table.define(name, ty)
+            # firma antigua: define(name, type)
+            if not isinstance(name_or_symbol, str):
+                nm = getattr(name_or_symbol, "name", None)
+                self.table.define(nm, ty)
+            else:
+                raise
+
 
     def enterFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
         name = ctx.Identifier().getText()
@@ -688,7 +844,7 @@ class AstAndSemantic(CompiscriptListener):
         }
         # Atrapa duplicados en el mismo ámbito
         try:
-            self._define_symbol(name, ret, metadata=meta)
+            self._define_symbol(name, ret, metadata=meta, err_ctx=ctx)
         except Exception as e:
             # deja registro pero NO abortes el walk
             self.errors.append(str(e))
@@ -710,7 +866,7 @@ class AstAndSemantic(CompiscriptListener):
         self._enter_scope()
         self.func_ret_stack.append(ret)
         for pname, pty in params:
-            self._define_symbol(pname, pty)
+            self._define_symbol(pname, pty, err_ctx=ctx)
 
     def exitFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
         name = ctx.Identifier().getText()

@@ -112,9 +112,10 @@ def build_diagnostics(text: str, errors: list[str]) -> list[Diagnostic]:
 def validate_and_publish(uri: str, code: str):
     diagnostics: list[Diagnostic] = []
     try:
-        from antlr4 import InputStream, CommonTokenStream
+        from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
         from parser.CompiscriptLexer import CompiscriptLexer
         from parser.CompiscriptParser import CompiscriptParser
+        from semantic.ast_and_semantic import AstAndSemantic
 
         log.debug("Starting parse/validate for uri=%s (code length=%d)", uri, len(code or ""))
         input_stream = InputStream(code)
@@ -123,32 +124,28 @@ def validate_and_publish(uri: str, code: str):
         parser = CompiscriptParser(tokens)
         tree = parser.program()
 
-        # llama al validador de flujo/semántica (puede devolver [] o None)
-                # llama al validador de flujo/semántica (puede devolver [] o None)
-        flow_errs = FlowValidator.validate(tree) or []
-        log.debug("FlowValidator returned %d errors: %r", len(flow_errs), flow_errs)
-        log.debug("flow_errs type: %s", type(flow_errs))
+        # Validador semántico principal (único)
+        walker = ParseTreeWalker()
+        listener = AstAndSemantic()
+        walker.walk(listener, tree)
+        all_errs = listener.errors or []
+        log.debug("AstAndSemantic returned %d errors: %r", len(all_errs), all_errs)
 
-        # usa la función de construcción de diagnostics que intenta ubicar columnas/lexemas
+        # Construir diagnósticos
         try:
-            diagnostics = build_diagnostics(code, flow_errs)
-        except Exception as e:
-            # fallback: si build_diagnostics falla, hacemos un mapeo simple
+            diagnostics = build_diagnostics(code, all_errs)
+        except Exception:
             log.exception("build_diagnostics failed")
-            diagnostics = []
-            for e in flow_errs:
-                diagnostics.append(make_diag_from_error(e))
-
-      
+            diagnostics = [make_diag_from_error(e) for e in all_errs]
 
     except Exception as ex:
         msg = f"Parser/server error: {ex}"
         diagnostics.append(make_diag_from_error(msg))
         log.exception("validate error")
 
-    # publica (aunque la lista esté vacía — eso limpia errores anteriores)
     ls.publish_diagnostics(uri, diagnostics)
     log.debug("Published %d diagnostics for %s", len(diagnostics), uri)
+
 
 if __name__ == "__main__":
     try:

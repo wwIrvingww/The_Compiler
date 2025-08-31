@@ -46,3 +46,17 @@ class SymbolTable:
         if not self._flow_stack:
             raise RuntimeError("No hay contexto de flujo para salir")
         self._flow_stack.pop()
+
+    def define_class(self, name: str, attributes: Dict[str, Symbol], methods: Dict[str, Symbol]):
+        if self.lookup(name):
+            raise KeyError(f"Clase '{name}' ya definida")
+        self.scopes[-1][name] = Symbol(name, "class", metadata={"attributes": attributes, "methods": methods})
+
+    def lookup_class(self, name: str) -> Optional[Symbol]:
+        sym = self.lookup(name)
+        if sym and sym.type == "class":
+            return sym
+        return None
+    
+    def define_global(self, symbol: Symbol):
+        self.scopes[0][symbol.name] = symbol

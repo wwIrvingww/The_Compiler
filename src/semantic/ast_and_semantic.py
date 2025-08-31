@@ -7,7 +7,11 @@ from ast_nodes import *
 
 def unify_bin(op: str, lt: Type, rt: Type) -> Type:
     if op in {"+", "-", "*", "/", "%"}:
-        return INT if lt == INT and rt == INT else ERROR
+        if lt == INT and rt == INT:
+            return INT
+        if op == "+" and lt == STR and rt == STR:
+            return STR
+        return ERROR
     if op in {"==", "!=", "<", "<=", ">", ">="}:
         if lt == rt and lt in {INT, STR, BOOL}:
             return BOOL
@@ -64,6 +68,9 @@ class AstAndSemantic(CompiscriptListener):
         self.table = SymbolTable()
         self.program = Program()
         self.const_scopes: List[set] = [set()]
+        self.current_class: Optional[str] = None
+        self.current_method: Optional[str] = None
+        self._class_frames: list = []
         self.func_ret_stack: List[Type] = [] #Agregar un stack para validar los returns
 
     def _enter_scope(self):
@@ -116,30 +123,12 @@ class AstAndSemantic(CompiscriptListener):
 
         node = VarDecl(name=name, is_const=False, declared_type=declared, init=init_node, ty=declared or init_ty or NULL)
         self.ast[ctx] = node
-        
-        
-    def exitConstantDeclaration(self, ctx: CompiscriptParser.ConstantDeclarationContext):
-        name = ctx.Identifier().getText()
-        declared = None
-        ttxt = _get_type_text_from_ctx(ctx)
-        if ttxt:
-            declared = _parse_type_text(ttxt)
 
-        expr_node = self.ast.get(ctx.expression())
-        expr_ty = self.types.get(ctx.expression(), ERROR)
-
-        try:
-            self._define_symbol(name, declared or expr_ty)
-        except Exception as e:
-            self.errors.append(str(e))
-
-        if declared and not compatible(declared, expr_ty):
-            self.errors.append(f"Tipo incompatible en const '{name}': esperado {declared}, obtenido {expr_ty}")
-
-        self.const_scopes[-1].add(name)
-
-        node = VarDecl(name=name, is_const=True, declared_type=declared, init=expr_node, ty=declared or expr_ty)
-        self.ast[ctx] = node
+        # Si estamos en una clase y NO en un método, registrar como atributo
+        if self.current_class and not self.current_method and self._class_frames:
+            frame = self._class_frames[-1]
+            frame["attributes"][name] = Symbol(name, node.ty.name)
+            frame["symbol"].metadata["attributes"] = frame["attributes"]
 
     def exitAssignment(self, ctx: CompiscriptParser.AssignmentContext):
         # Normaliza expressions a lista y toma RHS (último) como valor a asignar
@@ -178,6 +167,45 @@ class AstAndSemantic(CompiscriptListener):
 
         self.ast[ctx] = Assign(name=name, value=val_node, ty=(var_ty if var_ty == val_ty or var_ty in (None, NULL) else ERROR))
 
+    def exitConstantDeclaration(self, ctx: CompiscriptParser.ConstantDeclarationContext):
+        name = ctx.Identifier().getText()
+
+        declared = None
+        ttxt = _get_type_text_from_ctx(ctx)
+        if ttxt:
+            declared = _parse_type_text(ttxt)
+
+        init_node = None
+        init_ty = NULL
+        if ctx.expression():
+            init_node = self.ast.get(ctx.expression())
+            init_ty = self.types.get(ctx.expression(), ERROR)
+
+        if not ctx.expression():
+            self.errors.append(f"Constante '{name}' debe tener inicializador")
+
+        try:
+            sym = Symbol(name, declared or init_ty or NULL, metadata={"const": True})
+            self.table.define(sym)
+            # Registrar también en const_scopes
+            self.const_scopes[-1].add(name)
+        except Exception as e:
+            self.errors.append(str(e))
+
+        if ctx.expression() and declared and not compatible(declared, init_ty):
+            self.errors.append(
+                f"Tipo incompatible en inicializacion de const '{name}': esperado {declared}, obtenido {init_ty}"
+            )
+
+        node = VarDecl(
+            name=name,
+            is_const=True,
+            declared_type=declared,
+            init=init_node,
+            ty=declared or init_ty or NULL
+        )
+        self.ast[ctx] = node
+
     def exitPrintStatement(self, ctx: CompiscriptParser.PrintStatementContext):
         expr_node = self.ast.get(ctx.expression())
         self.ast[ctx] = PrintStmt(expr=expr_node, ty=NULL)
@@ -213,6 +241,7 @@ class AstAndSemantic(CompiscriptListener):
                 self.errors.append(f"Tipo de retorno incompatible: esperado {expected}, obtenido {actual_ty}")
 
         self.ast[ctx] = ReturnStmt(expr=rn, ty=actual_ty)
+
     def exitArrayLiteral(self, ctx):
         elements = []
         types = []
@@ -362,8 +391,6 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = node; self.types[ctx] = ty
 ######
 
-
-
     def exitRelationalExpr(self, ctx: CompiscriptParser.RelationalExprContext):
         if len(ctx.additiveExpr()) == 1:
             sub = ctx.additiveExpr(0)
@@ -387,6 +414,7 @@ class AstAndSemantic(CompiscriptListener):
         if sub in self.ast:
             self.ast[ctx] = self.ast[sub]
             self.types[ctx] = self.types.get(sub, ERROR)
+
     def exitPrimaryExpr(self, ctx: CompiscriptParser.PrimaryExprContext):
         # primaryExpr: literalExpr | leftHandSide | '(' expression ')'
         if ctx.literalExpr():
@@ -400,27 +428,168 @@ class AstAndSemantic(CompiscriptListener):
         self.types[ctx] = ty
 
     def exitLeftHandSide(self, ctx: CompiscriptParser.LeftHandSideContext):
-        # leftHandSide: primaryAtom (suffixOp)*
-        base_node = self.ast.get(ctx.primaryAtom()); base_ty = self.types.get(ctx.primaryAtom(), ERROR)
-        # Para esta fase básica, si hay suffixOp (llamada, indexación, propiedad) marcamos como no soportado
+        """
+        leftHandSide: primaryAtom (suffixOp)*
+        Procesa en orden los sufijos: .prop / (args) / [idx] (este último aún no soportado).
+        """
+        # Estado inicial (objeto base)
+        node = self.ast.get(ctx.primaryAtom())
+        ty   = self.types.get(ctx.primaryAtom(), ERROR)
+
         suffixes = list(ctx.suffixOp())
         if not suffixes:
-            self.ast[ctx] = base_node
-            self.types[ctx] = base_ty
+            self.ast[ctx] = node
+            self.types[ctx] = ty
             return
-        # Si hay propiedad o indexación en cualquiera de los sufijos -> aún no soportado
-        txt_all = "".join(s.getText() for s in suffixes)
-        if ("[" in txt_all) or ("." in txt_all):
-            self.errors.append("Accesos/calls/indexacion no soportados aun en esta fase.")
-            self.ast[ctx] = base_node
-            self.types[ctx] = ERROR
-            return 
-        # Sólo sufijos de llamada '()': deja el resultado que ya construyó exitCallExpr
-        node = self.ast.get(ctx)
-        ty   = self.types.get(ctx, ERROR)
-        if node is None:
-            # Fallback: si por cualquier razón exitCallExpr no corrió, deja el base
-            node, ty = base_node, base_ty
+
+        # Usaremos estas variables para validar llamadas a métodos
+        last_class_sym = None
+        last_prop_name = None
+
+        for sfx in suffixes:
+            # --- Acceso por punto: '.' Identifier ---
+            if isinstance(sfx, CompiscriptParser.PropertyAccessExprContext):
+                prop_name = sfx.Identifier().getText()
+                # 'ty' debe ser el nombre de una clase para poder acceder a atributos/métodos
+                
+                # print("==== DOT DEBUG ====")
+                # print("suffix text:", sfx.getText())
+                # print("prop_name:", prop_name)
+                # print("current ty object:", ty, "| ty.name:", getattr(ty, "name", None))
+                # print("lookup result:", self.table.lookup(getattr(ty, "name", None)))
+                # if self.table.lookup(getattr(ty, "name", None)):
+                #     print("attrs:", list(self.table.lookup(ty.name).metadata.get("attributes", {}).keys()))
+                #     print("methods:", list(self.table.lookup(ty.name).metadata.get("methods", {}).keys()))
+                # print("===================")
+
+                
+                class_sym = self.table.lookup(ty.name)
+                if not (class_sym and class_sym.type == "class"):
+                    self.errors.append(f"Tipo '{ty}' no tiene atributos")
+                    self.ast[ctx] = node
+                    self.types[ctx] = ERROR
+                    return
+
+                attrs = class_sym.metadata.get("attributes", {})
+                methods = class_sym.metadata.get("methods", {})
+
+                if prop_name in attrs:
+                    attr_sym = attrs[prop_name]
+                    ty = Type(attr_sym.type)           # p.ej. string/integer
+                    node = PropertyAccess(obj=node, prop=prop_name, ty=ty)
+                    last_class_sym = class_sym
+                    last_prop_name = prop_name
+
+                elif prop_name in methods:
+                    # Al acceder al método sin llamarlo todavía, tipamos como 'func'
+                    ty = Type("func")
+                    node = PropertyAccess(obj=node, prop=prop_name, ty=ty)
+                    last_class_sym = class_sym
+                    last_prop_name = prop_name
+
+                else:
+                    self.errors.append(f"Atributo o método '{prop_name}' no existe en clase '{ty}'")
+                    self.ast[ctx] = node
+                    self.types[ctx] = ERROR
+                    return
+
+            # --- Llamada: '(' arguments? ')' ---
+            elif isinstance(sfx, CompiscriptParser.CallExprContext):
+                # Recolecta argumentos ya tipados
+                arg_nodes, arg_types = [], []
+                if sfx.arguments():
+                    for e in sfx.arguments().expression():
+                        arg_nodes.append(self.ast.get(e))
+                        arg_types.append(self.types.get(e, ERROR))
+
+                ret = NULL
+
+                # print("==== CALL DEBUG ====")
+                # print("node before call:", node)
+                # print("last_class_sym:", last_class_sym)
+                # print("last_prop_name:", last_prop_name)
+                # print("arg_types:", [str(a) for a in arg_types])
+                # print("====================")
+
+                # Caso 1: llamada a método, ej. obj.m(...)
+                if isinstance(node, PropertyAccess) and last_class_sym and last_prop_name:
+                    methods = last_class_sym.metadata.get("methods", {})
+                    msym = methods.get(last_prop_name)
+                    if not msym:
+                        # PropertyAccess no era un método realmente
+                        self.errors.append(f"Llamada a no-método '{last_prop_name}'")
+                        self.ast[ctx] = node
+                        self.types[ctx] = ERROR
+                        return
+                    meta = msym.metadata or {}
+                    expected = meta.get("params", [])
+                    ret = meta.get("ret", NULL)
+                    if len(arg_types) != len(expected):
+                        self.errors.append(
+                            f"Numero de argumentos invalido en llamada a '{last_prop_name}': esperado {len(expected)}, obtenido {len(arg_types)}"
+                        )
+                    else:
+                        for i, (a, exp) in enumerate(zip(arg_types, expected), start=1):
+                            if not compatible(exp, a):
+                                self.errors.append(
+                                    f"Argumento {i} invalido en llamada a '{last_prop_name}': esperado {exp}, obtenido {a}"
+                                )
+                    node = Call(callee=node, args=arg_nodes, ty=ret)
+                    ty = ret
+
+                # Caso 2: llamada a función global, ej. f(...)
+                elif isinstance(node, Identifier):
+                    fname = node.name
+                    sym = self.table.lookup(fname)
+                    if sym is None or not getattr(sym, "metadata", None) or sym.metadata.get("kind") != "func":
+                        self.errors.append(f"Funcion no declarada: '{fname}'")
+                        self.ast[ctx] = node
+                        self.types[ctx] = ERROR
+                        return
+                    meta = sym.metadata
+                    expected_n     = meta.get("arity", len(meta.get("params", [])))
+                    expected_types = meta.get("params", [])
+                    ret            = meta.get("ret", NULL)
+
+                    if len(arg_types) != expected_n:
+                        self.errors.append(
+                            f"Numero de argumentos invalido en llamada a '{fname}': esperado {expected_n}, obtenido {len(arg_types)}"
+                        )
+                    else:
+                        for i, (a, exp) in enumerate(zip(arg_types, expected_types), start=1):
+                            if not compatible(exp, a):
+                                self.errors.append(
+                                    f"Argumento {i} invalido en llamada a '{fname}': esperado {exp}, obtenido {a}"
+                                )
+
+                    node = Call(callee=node, args=arg_nodes, ty=ret)
+                    ty = ret
+
+                else:
+                    # Llamadas sobre algo que no es ni Identifier ni PropertyAccess (p.ej. (expr)())
+                    self.errors.append("Llamada sobre objeto no invocable")
+                    self.ast[ctx] = node
+                    self.types[ctx] = ERROR
+                    return
+
+                # tras una llamada, ya no hay 'último método'
+                last_prop_name = None
+                last_class_sym = None
+
+            # --- Indexación: '[' expression ']' (aún no soportado) ---
+            elif isinstance(sfx, CompiscriptParser.IndexExprContext):
+                self.errors.append("Indexación no soportada aun en esta fase.")
+                self.ast[ctx] = node
+                self.types[ctx] = ERROR
+                return
+
+            else:
+                # Desconocido: fallback
+                self.ast[ctx] = node
+                self.types[ctx] = ty
+                return
+
+        # Resultado final del encadenamiento
         self.ast[ctx] = node
         self.types[ctx] = ty
 
@@ -491,8 +660,10 @@ class AstAndSemantic(CompiscriptListener):
         except TypeError:
             # firma antigua: define(name, ty)
             self.table.define(name, ty)
+
     def enterFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
         name = ctx.Identifier().getText()
+        self.current_method = name
 
         # Firma: params
         params = []
@@ -522,6 +693,19 @@ class AstAndSemantic(CompiscriptListener):
             # deja registro pero NO abortes el walk
             self.errors.append(str(e))
 
+        # Si estamos dentro de una clase, agregarlo al frame
+        if self.current_class and self._class_frames:
+            frame = self._class_frames[-1]
+            meta = {
+                "kind": "method",
+                "params": [t for _, t in params],
+                "ret": ret,
+            }
+            frame["methods"][name] = Symbol(name, "func", metadata=meta)
+            if name == "constructor":
+                frame["methods"]["constructor"] = Symbol("constructor", "func", metadata=meta)
+            frame["symbol"].metadata["methods"] = frame["methods"]
+
         # Scope de función + parámetros
         self._enter_scope()
         self.func_ret_stack.append(ret)
@@ -546,73 +730,154 @@ class AstAndSemantic(CompiscriptListener):
         node = FuncDecl(name=name, params=params, ret=ret, body=body, ty=ret)
         self.ast[ctx] = node
 
+        self.current_method = None
+
         self.func_ret_stack.pop()
         self._exit_scope()
     
-    def exitCallExpr(self, ctx: CompiscriptParser.CallExprContext):
-        """
-        En esta gramática, CallExpr es sólo el sufijo '(args)'.
-        El callee está en el primaryAtom del LeftHandSide padre.
-        Aquí armamos la Call y la escribimos directamente sobre el LeftHandSide padre.
-        """
-        # 1) Ubicar el LeftHandSide contenedor
-        p = ctx.parentCtx
-        lhs_ctx = None
-        while p is not None:
-            if isinstance(p, CompiscriptParser.LeftHandSideContext):
-                lhs_ctx = p
-                break
-            p = getattr(p, "parentCtx", None)
+    def enterClassDeclaration(self, ctx: CompiscriptParser.ClassDeclarationContext):
+        cls_name = ctx.Identifier(0).getText()
+        self.current_class = cls_name
 
-        # Si por alguna razón no hallamos el LHS, salimos silenciosamente
-        if lhs_ctx is None:
-            return
+        # Pre-registrar la clase en el scope global con metadata vacía
+        sym = self.table.scopes[0].get(cls_name)
+        if not sym or sym.type != "class":
+            sym = Symbol(cls_name, "class", metadata={"attributes": {}, "methods": {}, "base": None})
+            self.table.scopes[0][cls_name] = sym
 
-        # 2) Tomar el callee desde el primaryAtom del LHS (ya resuelto en exitIdentifierExpr)
-        callee_node = self.ast.get(lhs_ctx.primaryAtom())
-        callee_ty   = self.types.get(lhs_ctx.primaryAtom(), ERROR)
+        # Abrir un frame para acumular miembros durante el recorrido
+        self._class_frames.append({
+            "name": cls_name,
+            "symbol": sym,
+            "attributes": {},  # name -> Symbol
+            "methods": {},     # name -> Symbol
+        })
 
-        # Sólo soportamos callee como identificador simple por ahora
-        if not isinstance(callee_node, Identifier):
-            # Si hubiese sido algo como obj.m(...), tu política actual es marcar no soportado
-            self.errors.append("Accesos/calls/indexacion no soportados aun en esta fase.")
-            self.ast[lhs_ctx] = callee_node
-            self.types[lhs_ctx] = ERROR
-            return
+    def exitClassDeclaration(self, ctx: CompiscriptParser.ClassDeclarationContext):
+        # Nombre de la clase base (si existe)
+        base_tok  = ctx.Identifier(1)
+        base_name = base_tok.getText() if base_tok else None
 
-        fname = callee_node.name
-        sym = self.table.lookup(fname)
-        if sym is None or not getattr(sym, "metadata", None) or sym.metadata.get("kind") != "func":
-            self.errors.append(f"Funcion no declarada: '{fname}'")
-            call_node = Call(callee=callee_node, args=[], ty=ERROR)
-            self.ast[lhs_ctx] = call_node
-            self.types[lhs_ctx] = ERROR
-            return
+        # Cerrar el frame actual
+        frame = self._class_frames.pop()
+        sym = frame["symbol"]
 
-        # 3) Recolectar argumentos ya tipados
-        arg_nodes, arg_types = [], []
+        # Actualizar base en el símbolo
+        sym.metadata["base"] = base_name
+
+        # Crear nodo AST de clase (puedes guardar miembros si quieres)
+        self.ast[ctx] = ClassDecl(
+            name=frame["name"],
+            members=[],  # si quieres, aquí podrías pasar frame["attributes"].values() + frame["methods"].values()
+            ty=Type(frame["name"])
+        )
+
+        # Limpiar contexto actual
+        self.current_class = None
+
+        # print("Definiendo clase", frame["name"],
+        #     "con atributos", list(frame["attributes"].keys()),
+        #     "y métodos", list(frame["methods"].keys()))
+
+    def exitNewExpr(self, ctx: CompiscriptParser.NewExprContext):
+        cls = ctx.Identifier().getText()
+        args = []
         if ctx.arguments():
             for e in ctx.arguments().expression():
-                arg_nodes.append(self.ast.get(e))
-                arg_types.append(self.types.get(e, ERROR))
+                args.append(self.ast.get(e))
 
-        meta = sym.metadata
-        expected_n     = meta.get("arity", len(meta.get("params", [])))
-        expected_types = meta.get("params", [])
-        ret            = meta.get("ret", NULL)
+        class_sym = self.table.lookup_class(cls)
+        if not class_sym:
+            self.errors.append(f"Clase '{cls}' no declarada")
+            self.ast[ctx] = NewExpr(class_name=cls, args=args, ty=ERROR)
+            self.types[ctx] = ERROR
+            return
 
-        if len(arg_types) != expected_n:
-            self.errors.append(
-                f"Numero de argumentos invalido en llamada a '{fname}': esperado {expected_n}, obtenido {len(arg_types)}"
-            )
-        else:
-            for i, (a, exp) in enumerate(zip(arg_types, expected_types), start=1):
-                if not compatible(exp, a):
-                    self.errors.append(
-                        f"Argumento {i} invalido en llamada a '{fname}': esperado {exp}, obtenido {a}"
-                    )
+        ctor = class_sym.metadata.get("methods", {}).get("constructor")
+        if ctor:
+            expected = ctor.metadata.get("params", [])
+            if len(args) != len(expected):
+                self.errors.append(f"Constructor de '{cls}' espera {len(expected)} args, obtuvo {len(args)}")
 
-        # 4) Registrar la llamada como valor del LHS (para que primaryExpr la recoja)
-        call_node = Call(callee=callee_node, args=arg_nodes, ty=ret)
-        self.ast[lhs_ctx] = call_node
-        self.types[lhs_ctx] = ret
+        ty = Type(cls)
+        self.ast[ctx] = NewExpr(class_name=cls, args=args, ty=ty)
+        self.types[ctx] = ty
+
+    def exitThisExpr(self, ctx: CompiscriptParser.ThisExprContext):
+        if not self.current_class:
+            self.errors.append("'this' usado fuera de clase")
+            self.ast[ctx] = ThisExpr(ty=ERROR)
+            self.types[ctx] = ERROR
+            return
+        ty = Type(self.current_class)
+        self.ast[ctx] = ThisExpr(ty=ty)
+        self.types[ctx] = ty
+
+
+    # def exitCallExpr(self, ctx: CompiscriptParser.CallExprContext):
+    #     """
+    #     En esta gramática, CallExpr es sólo el sufijo '(args)'.
+    #     El callee está en el primaryAtom del LeftHandSide padre.
+    #     Aquí armamos la Call y la escribimos directamente sobre el LeftHandSide padre.
+    #     """
+    #     # 1) Ubicar el LeftHandSide contenedor
+    #     p = ctx.parentCtx
+    #     lhs_ctx = None
+    #     while p is not None:
+    #         if isinstance(p, CompiscriptParser.LeftHandSideContext):
+    #             lhs_ctx = p
+    #             break
+    #         p = getattr(p, "parentCtx", None)
+
+    #     # Si por alguna razón no hallamos el LHS, salimos silenciosamente
+    #     if lhs_ctx is None:
+    #         return
+
+    #     # 2) Tomar el callee desde el primaryAtom del LHS (ya resuelto en exitIdentifierExpr)
+    #     callee_node = self.ast.get(lhs_ctx.primaryAtom())
+    #     callee_ty   = self.types.get(lhs_ctx.primaryAtom(), ERROR)
+
+    #     # Sólo soportamos callee como identificador simple por ahora
+    #     if not isinstance(callee_node, Identifier):
+    #         # Si hubiese sido algo como obj.m(...), tu política actual es marcar no soportado
+    #         self.errors.append("Accesos/calls/indexacion no soportados aun en esta fase.")
+    #         self.ast[lhs_ctx] = callee_node
+    #         self.types[lhs_ctx] = ERROR
+    #         return
+
+    #     fname = callee_node.name
+    #     sym = self.table.lookup(fname)
+    #     if sym is None or not getattr(sym, "metadata", None) or sym.metadata.get("kind") != "func":
+    #         self.errors.append(f"Funcion no declarada: '{fname}'")
+    #         call_node = Call(callee=callee_node, args=[], ty=ERROR)
+    #         self.ast[lhs_ctx] = call_node
+    #         self.types[lhs_ctx] = ERROR
+    #         return
+
+    #     # 3) Recolectar argumentos ya tipados
+    #     arg_nodes, arg_types = [], []
+    #     if ctx.arguments():
+    #         for e in ctx.arguments().expression():
+    #             arg_nodes.append(self.ast.get(e))
+    #             arg_types.append(self.types.get(e, ERROR))
+
+    #     meta = sym.metadata
+    #     expected_n     = meta.get("arity", len(meta.get("params", [])))
+    #     expected_types = meta.get("params", [])
+    #     ret            = meta.get("ret", NULL)
+
+    #     if len(arg_types) != expected_n:
+    #         self.errors.append(
+    #             f"Numero de argumentos invalido en llamada a '{fname}': esperado {expected_n}, obtenido {len(arg_types)}"
+    #         )
+    #     else:
+    #         for i, (a, exp) in enumerate(zip(arg_types, expected_types), start=1):
+    #             if not compatible(exp, a):
+    #                 self.errors.append(
+    #                     f"Argumento {i} invalido en llamada a '{fname}': esperado {exp}, obtenido {a}"
+    #                 )
+
+    #     # 4) Registrar la llamada como valor del LHS (para que primaryExpr la recoja)
+    #     call_node = Call(callee=callee_node, args=arg_nodes, ty=ret)
+    #     self.ast[lhs_ctx] = call_node
+    #     self.types[lhs_ctx] = ret

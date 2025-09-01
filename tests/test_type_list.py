@@ -71,3 +71,4 @@ def test_nested_lists_fail():
     """
     errors, program = run_semantic(input)
     assert len(errors) == 2
+    

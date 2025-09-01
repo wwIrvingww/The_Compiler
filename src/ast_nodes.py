@@ -11,6 +11,10 @@ class Type:
             return str(self.element_type)+"[]"
         return self.name or "undefined"
 
+    def __eq__(self, other):
+        if not isinstance(other, Type):
+            return False
+        return str(self) == str(other)
 
 
 INT: Type = Type("integer")
@@ -33,6 +37,10 @@ def is_list(var: Type) -> bool:
     """
     return var.element_type is not None
 
+def index(array: Type):
+    if array.element_type:
+        return array.element_type
+
 @dataclass
 class ASTNode:
     ty: Type = field(default_factory=lambda: ERROR)
@@ -54,7 +62,8 @@ class VarDecl(ASTNode):
 
 @dataclass
 class Assign(ASTNode):
-    name: str = ""
+    dest: 'ASTNode' = None 
+    index: Optional['ASTNode'] = None
     value: 'ASTNode' = None  # type: ignore
 
 @dataclass
@@ -64,6 +73,13 @@ class Identifier(ASTNode):
 @dataclass
 class Literal(ASTNode):
     value: Union[int, bool, str, None] = None
+    
+
+@dataclass
+class Indexed(ASTNode):
+    name: str = ""
+    array: Optional['ASTNode'] = None
+    index: int = 0
     
 @dataclass
 class ArrayLiteral(ASTNode):
@@ -129,14 +145,17 @@ def _label(n: ASTNode) -> str:
     if isinstance(n, Program):     return "Program"
     if isinstance(n, Block):       return "Block"
     if isinstance(n, VarDecl): declared = f"{n.declared_type}" if n.declared_type else "—"; inferred = f"{n.ty}"; return f"VarDecl name={n.name} const={n.is_const} declared={declared} ty={inferred}" #cuando declared is None mejor rotular inferred=integer en la etiqueta para más slay
-    if isinstance(n, Assign):      return f"Assign {n.name} ty={n.ty}"
+    if isinstance(n, Assign):      
+            return f"Assign ty={n.dest.ty} \'{n.dest.name}\'{" at \'"+str(n.index.value)+"\'" if n.index else ""}"
     if isinstance(n, BinaryOp):    return f"BinaryOp '{n.op}' ty={n.ty}"
     if isinstance(n, UnaryOp):     return f"UnaryOp '{n.op}' ty={n.ty}"
     if isinstance(n, Identifier):  return f"Identifier {n.name} ty={n.ty}"
     if isinstance(n, Literal):     return f"Literal {repr(n.value)} ty={n.ty}"
     if isinstance(n, ArrayLiteral):
-        elems = [el.ty for el in n.elements]
+        elems = [(str(el.ty)) for el in n.elements]
         return f"ArrayLiteral elements={elems}"
+    if isinstance(n, Indexed):
+        return f"Indexed {n.name} ty={str(n.ty)} at index {n.index.value}"
 
     if isinstance(n, PrintStmt):   return "PrintStmt"
     if isinstance(n, IfStmt):      return "IfStmt"

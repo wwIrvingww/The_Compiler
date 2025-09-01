@@ -1,7 +1,7 @@
 # tests/test_symbol_table_errors.py
 
 import pytest
-from src.symbol_table import Symbol, SymbolTable
+from symbol_table import Symbol, SymbolTable
 
 def test_duplicate_declaration_records_error():
     st = SymbolTable()

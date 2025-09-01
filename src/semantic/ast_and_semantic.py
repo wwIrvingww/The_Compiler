@@ -94,19 +94,19 @@ class AstAndSemantic(CompiscriptListener):
     def exitVariableDeclaration(self, ctx: CompiscriptParser.VariableDeclarationContext):
         # Get name        
         name = ctx.Identifier().getText()
-
         # Save the declaration type (it can be NONE)
         declared = None
         ttxt = _get_type_text_from_ctx(ctx)
         if ttxt:
             declared = _parse_type_text(ttxt)
-
         init_node = None
         init_ty = NULL
+        
         if ctx.initializer():
             init_node = self.ast.get(ctx.initializer())
             init_ty = self.types.get(ctx.initializer(), ERROR)
         try:
+            
             self._define_symbol(name, declared or (init_ty if (init_ty != NULL) else None), err_ctx=ctx)
         except Exception as e:
             self.errors.append(str(e))
@@ -117,6 +117,31 @@ class AstAndSemantic(CompiscriptListener):
         node = VarDecl(name=name, is_const=False, declared_type=declared, init=init_node, ty=declared or init_ty or NULL)
         self.ast[ctx] = node
         
+    def exitConstantDeclaration(self, ctx: CompiscriptParser.VariableDeclarationContext):
+        # Get name        
+        name = ctx.Identifier().getText()
+        # Save the declaration type (it can be NONE)
+        declared = None
+        ttxt = _get_type_text_from_ctx(ctx)
+        if ttxt:
+            declared = _parse_type_text(ttxt)
+        init_node = None
+        init_ty = NULL
+        
+        if ctx.expression():
+            init_node = self.ast.get(ctx.expression())
+            init_ty = self.types.get(ctx.expression(), ERROR)
+        try:
+            
+            self._define_symbol(name, declared or (init_ty if (init_ty != NULL) else None), err_ctx=ctx, metadata={"const": True})
+        except Exception as e:
+            self.errors.append(str(e))
+
+        if ctx.expression() and not compatible(declared, init_ty):
+            self.errors.append(f"Tipo incompatible en inicializacion de '{name}': esperado {declared}, obtenido {init_ty}")
+
+        node = VarDecl(name=name, is_const=True, declared_type=declared, init=init_node, ty=declared or init_ty or NULL)
+        self.ast[ctx] = node
         
     def exitAssignment(self, ctx: CompiscriptParser.AssignmentContext):
         # RHS
@@ -125,7 +150,6 @@ class AstAndSemantic(CompiscriptListener):
         rhs_ctx = expr_list[-1]
         val_node = self.ast.get(rhs_ctx)
         val_ty = self.types.get(rhs_ctx, ERROR)
-
         # Intentar obtener Identifier directamente (si la gramática lo provee)
         ids = None
         try:
@@ -155,10 +179,10 @@ class AstAndSemantic(CompiscriptListener):
         # Si aún no encontramos un identifier, salimos (no es asignación simple a variable)
         if not ids:
             return
-
         # Resolver nombre (ids puede ser token o lista)
         try:
             if isinstance(ids, list):
+               
                 name = ids[-1].getText() if ids else None
             else:
                 name = ids.getText()
@@ -170,7 +194,13 @@ class AstAndSemantic(CompiscriptListener):
 
         # Buscar en la tabla de símbolos
         sym = self.table.lookup(name)
-
+        
+        try:
+            if(sym.metadata["const"]):
+                self.errors.append(f"No se puede asignar a const \'{sym.name}\'")
+        except:
+            pass
+        
         if sym is None:
             # intentar sacar línea del token/ctx
             line = 1
@@ -179,6 +209,8 @@ class AstAndSemantic(CompiscriptListener):
                 token = None
                 try:
                     token = ids.getSymbol()
+                    
+                    
                 except Exception:
                     # a veces ids es un Token (no un ctx) con .line
                     token = getattr(ids, 'symbol', None) or getattr(ids, 'getSymbol', None)
@@ -190,6 +222,7 @@ class AstAndSemantic(CompiscriptListener):
                 line = getattr(ctx.start, "line", 1)
 
             self.errors.append(f"[linea {line}] variable '{name}' no declarada")
+     
 
         # (Opcional) construir nodo AST/typing similar a antes
         # self.ast[ctx] = Assign(name=name, value=val_node, ty=(sym.type if sym else ERROR))
@@ -213,15 +246,14 @@ class AstAndSemantic(CompiscriptListener):
 
         cond_text = cond_ctx.getText()
         cond_ty = self.types.get(cond_ctx, None)
-
         try:
-            is_bool = (cond_ty is BOOL)
+            is_bool = (cond_ty == BOOL)
         except NameError:
             is_bool = False
 
         if not is_bool and cond_text not in ("true", "false"):
             line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
-            self.errors.append(f"[linea {line}] condicion de 'if' no es boolean: '{cond_text}'")
+            self.errors.append(f"[linea {line}] condicion de 'if' debe ser boolean: '{cond_text}'")
 
     def exitWhileStatement(self, ctx: CompiscriptParser.WhileStatementContext):
         """
@@ -244,7 +276,7 @@ class AstAndSemantic(CompiscriptListener):
 
         # Si tenemos sistema de tipos y BOOL está definido:
         try:
-            is_bool = (cond_ty is BOOL)
+            is_bool = (cond_ty == BOOL)
         except NameError:
             is_bool = False
 
@@ -252,7 +284,7 @@ class AstAndSemantic(CompiscriptListener):
         if not is_bool:
             if cond_text not in ("true", "false"):
                 line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
-                self.errors.append(f"[linea {line}] condicion de 'while' no es boolean: '{cond_text}'")
+                self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
 
 
     def exitForStatement(self, ctx: CompiscriptParser.ForStatementContext):
@@ -480,10 +512,34 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = node; self.types[ctx] = ty
 
     def exitExpression(self, ctx: CompiscriptParser.ExpressionContext):
+        
         sub = ctx.assignmentExpr()
+        try:
+            lhs = sub.leftHandSide()
+            indexed = self.ast.get(lhs)
+            rhs = sub.assignmentExpr()
+            compat = compatible(indexed.ty, self.types[rhs] )
+            if compat:
+                node = Assign(
+                    ty =indexed.ty,
+                    dest = indexed.array,
+                    index = indexed.index,
+                    value = self.ast[rhs]
+                )
+                self.ast[ctx] = node
+                self.types[ctx] = self.types.get(self.types[rhs], ERROR)
+                return
+            else:
+                self.errors.append(f"Tipo de asignacion incompatible: esperado {indexed.ty}, obtenido {self.types[rhs]}")
+                return
+        except:
+            self.ast[ctx] = self.ast[sub]
+            self.types[ctx] = self.types.get(sub, ERROR)
+
         if sub in self.ast:
             self.ast[ctx] = self.ast[sub]
             self.types[ctx] = self.types.get(sub, ERROR)
+    
     def exitPrimaryExpr(self, ctx: CompiscriptParser.PrimaryExprContext):
         # primaryExpr: literalExpr | leftHandSide | '(' expression ')'
         if ctx.literalExpr():
@@ -495,6 +551,7 @@ class AstAndSemantic(CompiscriptListener):
             node = self.ast.get(ctx.expression()); ty = self.types.get(ctx.expression(), ERROR)
         self.ast[ctx] = node
         self.types[ctx] = ty
+        
 
     def exitLeftHandSide(self, ctx: CompiscriptParser.LeftHandSideContext):
         # leftHandSide: primaryAtom (suffixOp)*
@@ -507,11 +564,41 @@ class AstAndSemantic(CompiscriptListener):
             return
         # Si hay propiedad o indexación en cualquiera de los sufijos -> aún no soportado
         txt_all = "".join(s.getText() for s in suffixes)
-        if ("[" in txt_all) or ("." in txt_all):
-            self.errors.append("Accesos/calls/indexacion no soportados aun en esta fase.")
-            self.ast[ctx] = base_node
-            self.types[ctx] = ERROR
-            return 
+        # Indexacion
+        for s in suffixes:
+            txt = "".join(s.getText())
+            # print("Suffix: ",txt)
+            if ("[" in txt):
+                if (is_list(base_node.ty)):
+                    # Chequear que la indexacion sea por un tipo entero
+                    suf_exp = self.types[s.expression()]
+                    if(str(suf_exp) != 'integer'):
+                        self.errors.append(f"Indexacion debe ser tipo \'integer\' no {suf_exp}")
+                        return
+                    # print("\t Suf exp", suf_exp)
+                    # print("\t Base node", str(base_node.ty))
+                    
+                    node = Indexed(
+                        name ="*"+str(base_node.name),
+                        array = base_node,
+                        index = self.ast[s.expression()],
+                        ty = index(base_node.ty)
+                    )
+                    # print("\n")
+                    self.ast[ctx] = node
+                    self.types[ctx] = index(base_node.ty)
+                    base_node = node
+                else:
+                    self.errors.append(f"Objeto de tipo \'{base_ty}\' no soporta indexacion")
+                    return
+                
+            ## Metodo
+            if ("." in txt_all):
+                self.errors.append("Accesos/indexacion no soportados aun en esta fase.")
+                self.ast[ctx] = base_node
+                self.types[ctx] = ERROR
+                return 
+        
         # Sólo sufijos de llamada '()': deja el resultado que ya construyó exitCallExpr
         node = self.ast.get(ctx)
         ty   = self.types.get(ctx, ERROR)
@@ -689,6 +776,7 @@ class AstAndSemantic(CompiscriptListener):
         El callee está en el primaryAtom del LeftHandSide padre.
         Aquí armamos la Call y la escribimos directamente sobre el LeftHandSide padre.
         """
+        print("called expression")
         # 1) Ubicar el LeftHandSide contenedor
         p = ctx.parentCtx
         lhs_ctx = None
@@ -705,7 +793,7 @@ class AstAndSemantic(CompiscriptListener):
         # 2) Tomar el callee desde el primaryAtom del LHS (ya resuelto en exitIdentifierExpr)
         callee_node = self.ast.get(lhs_ctx.primaryAtom())
         callee_ty   = self.types.get(lhs_ctx.primaryAtom(), ERROR)
-
+        
         # Sólo soportamos callee como identificador simple por ahora
         if not isinstance(callee_node, Identifier):
             # Si hubiese sido algo como obj.m(...), tu política actual es marcar no soportado

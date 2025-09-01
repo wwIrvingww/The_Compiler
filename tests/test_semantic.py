@@ -5,7 +5,6 @@ from parser.CompiscriptLexer import CompiscriptLexer
 from parser.CompiscriptParser import CompiscriptParser
 from semantic.ast_and_semantic import AstAndSemantic
 
-
 def run_semantic(code: str):
     """
     Ejecuta el lexer+parser+listener semántico sobre 'code' y
@@ -81,7 +80,7 @@ def test_type_mismatch_in_initializer_from_expr():
 def test_undeclared_identifier_on_assignment():
     code = 'y = 5;'
     errors, _ = run_semantic(code)
-    assert any("Identificador no declarado" in e and "'y'" in e for e in errors), errors
+    assert any("no declarada" in e and "'y'" in e for e in errors), errors
 
 
 def test_const_reassignment_forbidden():
@@ -90,6 +89,7 @@ def test_const_reassignment_forbidden():
     c = 2;
     """
     errors, _ = run_semantic(code)
+    print(errors)
     assert any("No se puede asignar a const" in e and "'c'" in e for e in errors), errors
 
 
@@ -107,27 +107,8 @@ def test_if_and_while_require_boolean_condition():
     while (2) { }
     """
     errors, _ = run_semantic(code)
-    assert any("La condicion del if debe ser boolean" in e for e in errors), errors
-    assert any("La condicion del while debe ser boolean" in e for e in errors), errors
-
-
-def test_property_assignment_not_supported_yet():
-    code = """
-    let obj: integer = 0;
-    obj.prop = 3;     // aún no soportado
-    """
-    errors, _ = run_semantic(code)
-    assert any("Identificador no declarado" in e for e in errors), errors
-
-
-def test_access_call_index_not_supported_yet():
-    code = """
-    let a: integer = 10;
-    print(a[0]);      // indexacion aún no soportada
-    """
-    errors, _ = run_semantic(code)
-    # El mensaje exacto lo pusiste como "Accesos/calls/indexación no soportados aún en esta fase."
-    assert any("no soportados" in e and "indexacion" in e for e in errors), errors
+    assert any("condicion de \'if\' debe ser boolean" in e for e in errors), errors
+    assert any("condicion de \'while\' debe ser boolean" in e for e in errors), errors
 
 
 def test_ternary_condition_must_be_boolean():

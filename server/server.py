@@ -1,12 +1,29 @@
 # server/server.py
+# --- bootstrap sys.path para que 'parser' (en src/) sea importable ---
+import os, sys
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))          # .../server
+_REPO_ROOT = os.path.abspath(os.path.join(_THIS_DIR, os.pardir))# repo root
+_SRC_DIR = os.path.join(_REPO_ROOT, "src")
+# Asegura que src/ y server/ estén en sys.path
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+if _THIS_DIR not in sys.path:
+    sys.path.insert(0, _THIS_DIR)
+
 import sys
 import logging
 import pathlib
 
 from pygls.server import LanguageServer
-from pygls.lsp.types import Diagnostic, DiagnosticSeverity, Position, Range
+from pygls.lsp.types import SemanticTokensLegend, SemanticTokensParams, SemanticTokens, SemanticTokensRegistrationOptions
+from handlers import SEM_LEGEND, build_semantic_tokens
 from pygls.uris import to_fs_path
 from urllib.parse import urlparse, unquote
+
+from handlers import SEM_LEGEND, build_semantic_tokens
+from pygls.lsp.methods import TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL
+from pygls.lsp.types import SemanticTokensParams, SemanticTokens
+from pygls.lsp.types import Diagnostic, DiagnosticSeverity, Range, Position
 
 
 
@@ -69,6 +86,15 @@ def did_save(ls, params):
         log.exception("could not read file on didSave")
         code = ""
     validate_and_publish(uri, code)
+
+@ls.feature(
+    TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
+    SemanticTokensRegistrationOptions(legend=SEM_LEGEND, full=True)
+)
+def semantic_tokens_full(params: SemanticTokensParams) -> SemanticTokens:
+    doc = ls.workspace.get_document(params.text_document.uri)
+    return build_semantic_tokens(doc.source)
+
 
 def build_diagnostics(text: str, errors: list[str]) -> list[Diagnostic]:
     import re

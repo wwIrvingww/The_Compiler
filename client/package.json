@@ -22,6 +22,13 @@
         ]
       }
     ],
+    "grammars": [
+      {
+        "language": "compiscript",
+        "scopeName": "source.compiscript",
+        "path": "./syntaxes/compiscript.tmLanguage.json"
+      }
+    ],
     "configuration": {
       "type": "object",
       "title": "Compiscript",
@@ -29,7 +36,7 @@
         "compiscript.pythonPath": {
           "type": "string",
           "default": "",
-          "description": "Ruta al ejecutable Python para el servidor LSP (ej: python o C:\\Python\\python.exe). Si está vacío se usa 'python' en Windows o 'python3' en Unix."
+          "description": "Ruta al ejecutable Python para el servidor LSP (ej: python o C:\\\\Python\\\\python.exe). Si está vacío se usa 'python' en Windows o 'python3' en Unix."
         }
       }
     }

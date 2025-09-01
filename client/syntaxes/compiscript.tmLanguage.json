@@ -1,0 +1,110 @@
+{
+  "name": "Compiscript",
+  "scopeName": "source.compiscript",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords-control" },
+    { "include": "#keywords-decl" },
+    { "include": "#types" },
+    { "include": "#constants" },
+    { "include": "#builtins" },
+    { "include": "#function-name" },
+    { "include": "#let-variable-after" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.compiscript",
+          "match": "//.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.compiscript",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            { "name": "constant.character.escape.compiscript", "match": "\\\\." }
+          ]
+        },
+        {
+          "name": "string.quoted.single.compiscript",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            { "name": "constant.character.escape.compiscript", "match": "\\\\." }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.compiscript",
+          "match": "\\b\\d+(?:_\\d+)*(?:\\.\\d+(?:_\\d+)*)?\\b"
+        }
+      ]
+    },
+    "keywords-control": {
+      "patterns": [
+        {
+          "name": "keyword.control.compiscript",
+          "match": "\\b(if|else|while|for|do|switch|case|default|break|continue|return)\\b"
+        }
+      ]
+    },
+    "keywords-decl": {
+      "patterns": [
+        {
+          "name": "keyword.declaration.compiscript",
+          "match": "\\b(function|let)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.compiscript",
+          "match": "\\b(integer|boolean|string|void)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.compiscript",
+          "match": "\\b(true|false|null)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.compiscript",
+          "match": "\\b(print)\\b"
+        }
+      ]
+    },
+    "function-name": {
+      "patterns": [
+        {
+          "name": "entity.name.function.compiscript",
+          "match": "(?<=\\bfunction\\s+)[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    },
+    "let-variable-after": {
+      "patterns": [
+        {
+          "name": "variable.other.readwrite.declaration.compiscript",
+          "match": "(?<=\\blet\\s+)[A-Za-z_][A-Za-z0-9_]*"
+        }
+      ]
+    }
+  }
+}

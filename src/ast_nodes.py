@@ -41,9 +41,21 @@ def index(array: Type):
     if array.element_type:
         return array.element_type
 
+
 @dataclass
 class ASTNode:
     ty: Type = field(default_factory=lambda: ERROR)
+
+
+@dataclass
+class BreakStmt(ASTNode):
+    name: str = "Break"
+    ty: Type = NULL
+    
+@dataclass
+class ContinueStmt(ASTNode):
+    name: str = "Continue"
+    ty: Type = NULL
 
 @dataclass
 class Program(ASTNode):

@@ -87,9 +87,63 @@ def test_if_else():
     errors, program = run_semantic(code)
     assert len(errors) == 0
     
-def test_switch():
+def test_switch_positive():
     code = """
+    let tem : integer = 10;
+    let tem_str : string = "hola";
+    switch(tem){
+        case 1: 
+            print("es 1");
+        default:
+            switch(tem_str){
+                case "hola":
+                    print("Es saludo");
+                case "adios":
+                    print("es despedida");
+                default:
+                    print("No es saludo ni despdedida");
+            }
+    }
     """
     errors, program = run_semantic(code)
-    ## TBD
-    assert True
+    assert len(errors) == 0
+    
+def test_switch_negative():
+    # Sin casos
+    code1 = """
+    let tem = 1;
+    switch(tem){}
+    """
+    errors1, _ = run_semantic(code1)
+    assert any("debe tener al menos un caso" in e for e in errors1), errors1
+    
+    # Casos repetidos
+    code2 = """
+    let tem = 1;
+    switch(tem){
+        case 1:
+            print("es 1");
+        case 1:
+            print("repetido");
+    }
+    """
+    errors2, _ = run_semantic(code2)
+    assert any("caso repetido en sentencia \'switch\'" in e for e in errors2), errors2
+    
+    # Tipos no concuerdan
+    code3 = """
+    let tem : string = "hola";
+    switch(tem){
+        case 1:
+            print("es 1");
+        default:
+            print("default");
+    }
+    """
+    errors3, _ = run_semantic(code3)
+    assert any("\'case\' debe tener el mismo tipo que la expresion" in e for e in errors3), errors3
+    
+    
+    
+    
+    

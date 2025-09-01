@@ -337,6 +337,10 @@ class AstAndSemantic(CompiscriptListener):
         expr_node = self.ast.get(ctx.expression())
         self.ast[ctx] = PrintStmt(expr=expr_node, ty=NULL)
 
+    # ---------------------------------- #
+    #       Comparison Statements        #
+    # -----------------------------------#
+
     def exitIfStatement(self, ctx: CompiscriptParser.IfStatementContext):
         # localizar la condición
         cond_ctx = None
@@ -393,7 +397,67 @@ class AstAndSemantic(CompiscriptListener):
         )
         self.ast[ctx] = node
         
+    def exitSwitchStatement(self, ctx):
+
+        # Fetch variable of the switch
+        switch_exp_ctx = ctx.expression()
+        switch_node = self.ast.get(switch_exp_ctx)
+        switch_ty = switch_node.ty
         
+        cases_nodes = []
+        case_values = []
+        # For the cases
+        if ctx.switchCase():
+            cases_ctx = ctx.switchCase()
+            for c in cases_ctx:
+                case_exp = self.ast.get(c.expression())
+                if (case_exp.ty != switch_ty):
+                    self._error(
+                        ctx,
+                        msg=f"\'case\' debe tener el mismo tipo que la expresion. Se esperaba \'{switch_ty}\' y se obtuvo \'{case_exp.ty}\'"
+                    )
+                case_values.append(case_exp.value)
+                stmts = [self.ast.get(s) for s in c.statement()]
+                case_block = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+                cases_nodes.append(
+                    SwitchCase(
+                        ty=case_exp.ty,
+                        literal= case_exp,
+                        case_block=case_block
+                    )
+                )
+        else:
+            if not ctx.defaultCase():
+                self._error(
+                    ctx,
+                    msg="sentencia \'switch\' debe tener al menos un caso"
+                )
+        # Casos repetidos
+        if len(case_values) != len(set(case_values)):
+            self._error(
+                ctx=ctx,
+                msg="caso repetido en sentencia \'switch\'"
+            )
+        
+        # Default case (opcional)
+        default_node = None
+        if ctx.defaultCase():
+            stmts = [self.ast.get(s) for s in ctx.defaultCase().statement()]
+            default_node = DefaultCase(
+                ty=switch_ty,
+                default_block=Block(statements=[s for s in stmts if s is not None], ty=NULL)   
+            )
+            
+        
+        complete_node = SwitchStatement(
+            ty=switch_node.ty,
+            variable=switch_node,
+            cases=cases_nodes,
+            default=default_node
+        )
+
+        self.ast[ctx] = complete_node
+        self.types[ctx] = switch_node.ty
         
     # ---------------------------------- #
     #       Iterative Statements         #

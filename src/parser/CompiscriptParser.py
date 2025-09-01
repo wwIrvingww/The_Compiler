@@ -25,10 +25,10 @@ def serializedATN():
         7,1,7,3,7,167,8,7,1,8,1,8,1,8,1,9,1,9,1,9,1,9,1,9,1,9,1,10,1,10,
         1,10,1,10,1,10,1,10,1,10,3,10,185,8,10,1,11,1,11,1,11,1,11,1,11,
         1,11,1,12,1,12,1,12,1,12,1,12,1,12,1,12,1,12,1,13,1,13,1,13,1,13,
-        1,13,3,13,206,8,13,1,13,3,13,209,8,13,1,13,1,13,3,13,213,8,13,1,
-        13,1,13,1,13,1,14,1,14,1,14,1,14,1,14,1,14,1,14,1,14,1,15,1,15,1,
-        15,1,16,1,16,1,16,1,17,1,17,3,17,234,8,17,1,17,1,17,1,18,1,18,1,
-        18,1,18,1,18,1,18,1,18,1,18,1,19,1,19,1,19,1,19,1,19,1,19,5,19,252,
+        1,13,1,13,1,13,1,13,1,14,1,14,1,14,1,15,1,15,1,15,1,16,1,16,3,16,
+        217,8,16,1,16,1,16,1,17,1,17,1,17,1,17,1,17,1,17,1,17,1,17,1,18,
+        1,18,1,18,1,18,1,18,3,18,234,8,18,1,18,3,18,237,8,18,1,18,1,18,3,
+        18,241,8,18,1,18,1,18,1,18,1,19,1,19,1,19,1,19,1,19,1,19,5,19,252,
         8,19,10,19,12,19,255,9,19,1,19,3,19,258,8,19,1,19,1,19,1,20,1,20,
         1,20,1,20,5,20,266,8,20,10,20,12,20,269,9,20,1,21,1,21,1,21,5,21,
         274,8,21,10,21,12,21,277,9,21,1,22,1,22,1,22,1,22,3,22,283,8,22,
@@ -56,8 +56,8 @@ def serializedATN():
         55,59,59,499,0,95,1,0,0,0,2,118,1,0,0,0,4,120,1,0,0,0,6,129,1,0,
         0,0,8,139,1,0,0,0,10,148,1,0,0,0,12,151,1,0,0,0,14,166,1,0,0,0,16,
         168,1,0,0,0,18,171,1,0,0,0,20,177,1,0,0,0,22,186,1,0,0,0,24,192,
-        1,0,0,0,26,200,1,0,0,0,28,217,1,0,0,0,30,225,1,0,0,0,32,228,1,0,
-        0,0,34,231,1,0,0,0,36,237,1,0,0,0,38,245,1,0,0,0,40,261,1,0,0,0,
+        1,0,0,0,26,200,1,0,0,0,28,208,1,0,0,0,30,211,1,0,0,0,32,214,1,0,
+        0,0,34,220,1,0,0,0,36,228,1,0,0,0,38,245,1,0,0,0,40,261,1,0,0,0,
         42,270,1,0,0,0,44,278,1,0,0,0,46,291,1,0,0,0,48,299,1,0,0,0,50,304,
         1,0,0,0,52,322,1,0,0,0,54,324,1,0,0,0,56,337,1,0,0,0,58,339,1,0,
         0,0,60,347,1,0,0,0,62,355,1,0,0,0,64,363,1,0,0,0,66,371,1,0,0,0,
@@ -68,9 +68,9 @@ def serializedATN():
         0,97,95,1,0,0,0,98,99,5,0,0,1,99,1,1,0,0,0,100,119,3,6,3,0,101,119,
         3,8,4,0,102,119,3,14,7,0,103,119,3,44,22,0,104,119,3,50,25,0,105,
         119,3,16,8,0,106,119,3,18,9,0,107,119,3,4,2,0,108,119,3,20,10,0,
-        109,119,3,22,11,0,110,119,3,24,12,0,111,119,3,26,13,0,112,119,3,
-        28,14,0,113,119,3,36,18,0,114,119,3,38,19,0,115,119,3,30,15,0,116,
-        119,3,32,16,0,117,119,3,34,17,0,118,100,1,0,0,0,118,101,1,0,0,0,
+        109,119,3,22,11,0,110,119,3,24,12,0,111,119,3,36,18,0,112,119,3,
+        26,13,0,113,119,3,34,17,0,114,119,3,38,19,0,115,119,3,28,14,0,116,
+        119,3,30,15,0,117,119,3,32,16,0,118,100,1,0,0,0,118,101,1,0,0,0,
         118,102,1,0,0,0,118,103,1,0,0,0,118,104,1,0,0,0,118,105,1,0,0,0,
         118,106,1,0,0,0,118,107,1,0,0,0,118,108,1,0,0,0,118,109,1,0,0,0,
         118,110,1,0,0,0,118,111,1,0,0,0,118,112,1,0,0,0,118,113,1,0,0,0,
@@ -97,90 +97,90 @@ def serializedATN():
         0,189,190,5,12,0,0,190,191,3,4,2,0,191,23,1,0,0,0,192,193,5,16,0,
         0,193,194,3,4,2,0,194,195,5,15,0,0,195,196,5,11,0,0,196,197,3,54,
         27,0,197,198,5,12,0,0,198,199,5,5,0,0,199,25,1,0,0,0,200,201,5,17,
-        0,0,201,205,5,11,0,0,202,206,3,6,3,0,203,206,3,14,7,0,204,206,5,
-        5,0,0,205,202,1,0,0,0,205,203,1,0,0,0,205,204,1,0,0,0,206,208,1,
-        0,0,0,207,209,3,54,27,0,208,207,1,0,0,0,208,209,1,0,0,0,209,210,
-        1,0,0,0,210,212,5,5,0,0,211,213,3,54,27,0,212,211,1,0,0,0,212,213,
-        1,0,0,0,213,214,1,0,0,0,214,215,5,12,0,0,215,216,3,4,2,0,216,27,
-        1,0,0,0,217,218,5,18,0,0,218,219,5,11,0,0,219,220,5,59,0,0,220,221,
-        5,19,0,0,221,222,3,54,27,0,222,223,5,12,0,0,223,224,3,4,2,0,224,
-        29,1,0,0,0,225,226,5,20,0,0,226,227,5,5,0,0,227,31,1,0,0,0,228,229,
-        5,21,0,0,229,230,5,5,0,0,230,33,1,0,0,0,231,233,5,22,0,0,232,234,
-        3,54,27,0,233,232,1,0,0,0,233,234,1,0,0,0,234,235,1,0,0,0,235,236,
-        5,5,0,0,236,35,1,0,0,0,237,238,5,23,0,0,238,239,3,4,2,0,239,240,
-        5,24,0,0,240,241,5,11,0,0,241,242,5,59,0,0,242,243,5,12,0,0,243,
-        244,3,4,2,0,244,37,1,0,0,0,245,246,5,25,0,0,246,247,5,11,0,0,247,
-        248,3,54,27,0,248,249,5,12,0,0,249,253,5,1,0,0,250,252,3,40,20,0,
-        251,250,1,0,0,0,252,255,1,0,0,0,253,251,1,0,0,0,253,254,1,0,0,0,
-        254,257,1,0,0,0,255,253,1,0,0,0,256,258,3,42,21,0,257,256,1,0,0,
-        0,257,258,1,0,0,0,258,259,1,0,0,0,259,260,5,2,0,0,260,39,1,0,0,0,
-        261,262,5,26,0,0,262,263,3,54,27,0,263,267,5,8,0,0,264,266,3,2,1,
-        0,265,264,1,0,0,0,266,269,1,0,0,0,267,265,1,0,0,0,267,268,1,0,0,
-        0,268,41,1,0,0,0,269,267,1,0,0,0,270,271,5,27,0,0,271,275,5,8,0,
-        0,272,274,3,2,1,0,273,272,1,0,0,0,274,277,1,0,0,0,275,273,1,0,0,
-        0,275,276,1,0,0,0,276,43,1,0,0,0,277,275,1,0,0,0,278,279,5,28,0,
-        0,279,280,5,59,0,0,280,282,5,11,0,0,281,283,3,46,23,0,282,281,1,
-        0,0,0,282,283,1,0,0,0,283,284,1,0,0,0,284,287,5,12,0,0,285,286,5,
-        8,0,0,286,288,3,88,44,0,287,285,1,0,0,0,287,288,1,0,0,0,288,289,
-        1,0,0,0,289,290,3,4,2,0,290,45,1,0,0,0,291,296,3,48,24,0,292,293,
-        5,29,0,0,293,295,3,48,24,0,294,292,1,0,0,0,295,298,1,0,0,0,296,294,
-        1,0,0,0,296,297,1,0,0,0,297,47,1,0,0,0,298,296,1,0,0,0,299,302,5,
-        59,0,0,300,301,5,8,0,0,301,303,3,88,44,0,302,300,1,0,0,0,302,303,
-        1,0,0,0,303,49,1,0,0,0,304,305,5,30,0,0,305,308,5,59,0,0,306,307,
-        5,8,0,0,307,309,5,59,0,0,308,306,1,0,0,0,308,309,1,0,0,0,309,310,
-        1,0,0,0,310,314,5,1,0,0,311,313,3,52,26,0,312,311,1,0,0,0,313,316,
-        1,0,0,0,314,312,1,0,0,0,314,315,1,0,0,0,315,317,1,0,0,0,316,314,
-        1,0,0,0,317,318,5,2,0,0,318,51,1,0,0,0,319,323,3,44,22,0,320,323,
-        3,6,3,0,321,323,3,8,4,0,322,319,1,0,0,0,322,320,1,0,0,0,322,321,
-        1,0,0,0,323,53,1,0,0,0,324,325,3,56,28,0,325,55,1,0,0,0,326,327,
-        3,78,39,0,327,328,5,7,0,0,328,329,3,56,28,0,329,338,1,0,0,0,330,
-        331,3,78,39,0,331,332,5,9,0,0,332,333,5,59,0,0,333,334,5,7,0,0,334,
-        335,3,56,28,0,335,338,1,0,0,0,336,338,3,58,29,0,337,326,1,0,0,0,
-        337,330,1,0,0,0,337,336,1,0,0,0,338,57,1,0,0,0,339,345,3,60,30,0,
-        340,341,5,31,0,0,341,342,3,54,27,0,342,343,5,8,0,0,343,344,3,54,
-        27,0,344,346,1,0,0,0,345,340,1,0,0,0,345,346,1,0,0,0,346,59,1,0,
-        0,0,347,352,3,62,31,0,348,349,5,32,0,0,349,351,3,62,31,0,350,348,
-        1,0,0,0,351,354,1,0,0,0,352,350,1,0,0,0,352,353,1,0,0,0,353,61,1,
-        0,0,0,354,352,1,0,0,0,355,360,3,64,32,0,356,357,5,33,0,0,357,359,
-        3,64,32,0,358,356,1,0,0,0,359,362,1,0,0,0,360,358,1,0,0,0,360,361,
-        1,0,0,0,361,63,1,0,0,0,362,360,1,0,0,0,363,368,3,66,33,0,364,365,
-        7,1,0,0,365,367,3,66,33,0,366,364,1,0,0,0,367,370,1,0,0,0,368,366,
-        1,0,0,0,368,369,1,0,0,0,369,65,1,0,0,0,370,368,1,0,0,0,371,376,3,
-        68,34,0,372,373,7,2,0,0,373,375,3,68,34,0,374,372,1,0,0,0,375,378,
-        1,0,0,0,376,374,1,0,0,0,376,377,1,0,0,0,377,67,1,0,0,0,378,376,1,
-        0,0,0,379,384,3,70,35,0,380,381,7,3,0,0,381,383,3,70,35,0,382,380,
-        1,0,0,0,383,386,1,0,0,0,384,382,1,0,0,0,384,385,1,0,0,0,385,69,1,
-        0,0,0,386,384,1,0,0,0,387,392,3,72,36,0,388,389,7,4,0,0,389,391,
-        3,72,36,0,390,388,1,0,0,0,391,394,1,0,0,0,392,390,1,0,0,0,392,393,
-        1,0,0,0,393,71,1,0,0,0,394,392,1,0,0,0,395,396,7,5,0,0,396,399,3,
-        72,36,0,397,399,3,74,37,0,398,395,1,0,0,0,398,397,1,0,0,0,399,73,
-        1,0,0,0,400,407,3,76,38,0,401,407,3,78,39,0,402,403,5,11,0,0,403,
-        404,3,54,27,0,404,405,5,12,0,0,405,407,1,0,0,0,406,400,1,0,0,0,406,
-        401,1,0,0,0,406,402,1,0,0,0,407,75,1,0,0,0,408,414,5,56,0,0,409,
-        414,3,86,43,0,410,414,5,46,0,0,411,414,5,47,0,0,412,414,5,48,0,0,
-        413,408,1,0,0,0,413,409,1,0,0,0,413,410,1,0,0,0,413,411,1,0,0,0,
-        413,412,1,0,0,0,414,77,1,0,0,0,415,419,3,80,40,0,416,418,3,82,41,
-        0,417,416,1,0,0,0,418,421,1,0,0,0,419,417,1,0,0,0,419,420,1,0,0,
-        0,420,79,1,0,0,0,421,419,1,0,0,0,422,432,5,59,0,0,423,424,5,49,0,
-        0,424,425,5,59,0,0,425,427,5,11,0,0,426,428,3,84,42,0,427,426,1,
-        0,0,0,427,428,1,0,0,0,428,429,1,0,0,0,429,432,5,12,0,0,430,432,5,
-        50,0,0,431,422,1,0,0,0,431,423,1,0,0,0,431,430,1,0,0,0,432,81,1,
-        0,0,0,433,435,5,11,0,0,434,436,3,84,42,0,435,434,1,0,0,0,435,436,
-        1,0,0,0,436,437,1,0,0,0,437,445,5,12,0,0,438,439,5,51,0,0,439,440,
-        3,54,27,0,440,441,5,52,0,0,441,445,1,0,0,0,442,443,5,9,0,0,443,445,
-        5,59,0,0,444,433,1,0,0,0,444,438,1,0,0,0,444,442,1,0,0,0,445,83,
-        1,0,0,0,446,451,3,54,27,0,447,448,5,29,0,0,448,450,3,54,27,0,449,
-        447,1,0,0,0,450,453,1,0,0,0,451,449,1,0,0,0,451,452,1,0,0,0,452,
-        85,1,0,0,0,453,451,1,0,0,0,454,463,5,51,0,0,455,460,3,54,27,0,456,
-        457,5,29,0,0,457,459,3,54,27,0,458,456,1,0,0,0,459,462,1,0,0,0,460,
-        458,1,0,0,0,460,461,1,0,0,0,461,464,1,0,0,0,462,460,1,0,0,0,463,
-        455,1,0,0,0,463,464,1,0,0,0,464,465,1,0,0,0,465,466,5,52,0,0,466,
-        87,1,0,0,0,467,472,3,90,45,0,468,469,5,51,0,0,469,471,5,52,0,0,470,
-        468,1,0,0,0,471,474,1,0,0,0,472,470,1,0,0,0,472,473,1,0,0,0,473,
-        89,1,0,0,0,474,472,1,0,0,0,475,476,7,6,0,0,476,91,1,0,0,0,43,95,
-        118,124,132,135,142,166,184,205,208,212,233,253,257,267,275,282,
-        287,296,302,308,314,322,337,345,352,360,368,376,384,392,398,406,
-        413,419,427,431,435,444,451,460,463,472
+        0,0,201,202,5,11,0,0,202,203,5,59,0,0,203,204,5,18,0,0,204,205,3,
+        54,27,0,205,206,5,12,0,0,206,207,3,4,2,0,207,27,1,0,0,0,208,209,
+        5,19,0,0,209,210,5,5,0,0,210,29,1,0,0,0,211,212,5,20,0,0,212,213,
+        5,5,0,0,213,31,1,0,0,0,214,216,5,21,0,0,215,217,3,54,27,0,216,215,
+        1,0,0,0,216,217,1,0,0,0,217,218,1,0,0,0,218,219,5,5,0,0,219,33,1,
+        0,0,0,220,221,5,22,0,0,221,222,3,4,2,0,222,223,5,23,0,0,223,224,
+        5,11,0,0,224,225,5,59,0,0,225,226,5,12,0,0,226,227,3,4,2,0,227,35,
+        1,0,0,0,228,229,5,24,0,0,229,233,5,11,0,0,230,234,3,6,3,0,231,234,
+        3,14,7,0,232,234,5,5,0,0,233,230,1,0,0,0,233,231,1,0,0,0,233,232,
+        1,0,0,0,234,236,1,0,0,0,235,237,3,54,27,0,236,235,1,0,0,0,236,237,
+        1,0,0,0,237,238,1,0,0,0,238,240,5,5,0,0,239,241,3,54,27,0,240,239,
+        1,0,0,0,240,241,1,0,0,0,241,242,1,0,0,0,242,243,5,12,0,0,243,244,
+        3,4,2,0,244,37,1,0,0,0,245,246,5,25,0,0,246,247,5,11,0,0,247,248,
+        3,54,27,0,248,249,5,12,0,0,249,253,5,1,0,0,250,252,3,40,20,0,251,
+        250,1,0,0,0,252,255,1,0,0,0,253,251,1,0,0,0,253,254,1,0,0,0,254,
+        257,1,0,0,0,255,253,1,0,0,0,256,258,3,42,21,0,257,256,1,0,0,0,257,
+        258,1,0,0,0,258,259,1,0,0,0,259,260,5,2,0,0,260,39,1,0,0,0,261,262,
+        5,26,0,0,262,263,3,54,27,0,263,267,5,8,0,0,264,266,3,2,1,0,265,264,
+        1,0,0,0,266,269,1,0,0,0,267,265,1,0,0,0,267,268,1,0,0,0,268,41,1,
+        0,0,0,269,267,1,0,0,0,270,271,5,27,0,0,271,275,5,8,0,0,272,274,3,
+        2,1,0,273,272,1,0,0,0,274,277,1,0,0,0,275,273,1,0,0,0,275,276,1,
+        0,0,0,276,43,1,0,0,0,277,275,1,0,0,0,278,279,5,28,0,0,279,280,5,
+        59,0,0,280,282,5,11,0,0,281,283,3,46,23,0,282,281,1,0,0,0,282,283,
+        1,0,0,0,283,284,1,0,0,0,284,287,5,12,0,0,285,286,5,8,0,0,286,288,
+        3,88,44,0,287,285,1,0,0,0,287,288,1,0,0,0,288,289,1,0,0,0,289,290,
+        3,4,2,0,290,45,1,0,0,0,291,296,3,48,24,0,292,293,5,29,0,0,293,295,
+        3,48,24,0,294,292,1,0,0,0,295,298,1,0,0,0,296,294,1,0,0,0,296,297,
+        1,0,0,0,297,47,1,0,0,0,298,296,1,0,0,0,299,302,5,59,0,0,300,301,
+        5,8,0,0,301,303,3,88,44,0,302,300,1,0,0,0,302,303,1,0,0,0,303,49,
+        1,0,0,0,304,305,5,30,0,0,305,308,5,59,0,0,306,307,5,8,0,0,307,309,
+        5,59,0,0,308,306,1,0,0,0,308,309,1,0,0,0,309,310,1,0,0,0,310,314,
+        5,1,0,0,311,313,3,52,26,0,312,311,1,0,0,0,313,316,1,0,0,0,314,312,
+        1,0,0,0,314,315,1,0,0,0,315,317,1,0,0,0,316,314,1,0,0,0,317,318,
+        5,2,0,0,318,51,1,0,0,0,319,323,3,44,22,0,320,323,3,6,3,0,321,323,
+        3,8,4,0,322,319,1,0,0,0,322,320,1,0,0,0,322,321,1,0,0,0,323,53,1,
+        0,0,0,324,325,3,56,28,0,325,55,1,0,0,0,326,327,3,78,39,0,327,328,
+        5,7,0,0,328,329,3,56,28,0,329,338,1,0,0,0,330,331,3,78,39,0,331,
+        332,5,9,0,0,332,333,5,59,0,0,333,334,5,7,0,0,334,335,3,56,28,0,335,
+        338,1,0,0,0,336,338,3,58,29,0,337,326,1,0,0,0,337,330,1,0,0,0,337,
+        336,1,0,0,0,338,57,1,0,0,0,339,345,3,60,30,0,340,341,5,31,0,0,341,
+        342,3,54,27,0,342,343,5,8,0,0,343,344,3,54,27,0,344,346,1,0,0,0,
+        345,340,1,0,0,0,345,346,1,0,0,0,346,59,1,0,0,0,347,352,3,62,31,0,
+        348,349,5,32,0,0,349,351,3,62,31,0,350,348,1,0,0,0,351,354,1,0,0,
+        0,352,350,1,0,0,0,352,353,1,0,0,0,353,61,1,0,0,0,354,352,1,0,0,0,
+        355,360,3,64,32,0,356,357,5,33,0,0,357,359,3,64,32,0,358,356,1,0,
+        0,0,359,362,1,0,0,0,360,358,1,0,0,0,360,361,1,0,0,0,361,63,1,0,0,
+        0,362,360,1,0,0,0,363,368,3,66,33,0,364,365,7,1,0,0,365,367,3,66,
+        33,0,366,364,1,0,0,0,367,370,1,0,0,0,368,366,1,0,0,0,368,369,1,0,
+        0,0,369,65,1,0,0,0,370,368,1,0,0,0,371,376,3,68,34,0,372,373,7,2,
+        0,0,373,375,3,68,34,0,374,372,1,0,0,0,375,378,1,0,0,0,376,374,1,
+        0,0,0,376,377,1,0,0,0,377,67,1,0,0,0,378,376,1,0,0,0,379,384,3,70,
+        35,0,380,381,7,3,0,0,381,383,3,70,35,0,382,380,1,0,0,0,383,386,1,
+        0,0,0,384,382,1,0,0,0,384,385,1,0,0,0,385,69,1,0,0,0,386,384,1,0,
+        0,0,387,392,3,72,36,0,388,389,7,4,0,0,389,391,3,72,36,0,390,388,
+        1,0,0,0,391,394,1,0,0,0,392,390,1,0,0,0,392,393,1,0,0,0,393,71,1,
+        0,0,0,394,392,1,0,0,0,395,396,7,5,0,0,396,399,3,72,36,0,397,399,
+        3,74,37,0,398,395,1,0,0,0,398,397,1,0,0,0,399,73,1,0,0,0,400,407,
+        3,76,38,0,401,407,3,78,39,0,402,403,5,11,0,0,403,404,3,54,27,0,404,
+        405,5,12,0,0,405,407,1,0,0,0,406,400,1,0,0,0,406,401,1,0,0,0,406,
+        402,1,0,0,0,407,75,1,0,0,0,408,414,5,56,0,0,409,414,3,86,43,0,410,
+        414,5,46,0,0,411,414,5,47,0,0,412,414,5,48,0,0,413,408,1,0,0,0,413,
+        409,1,0,0,0,413,410,1,0,0,0,413,411,1,0,0,0,413,412,1,0,0,0,414,
+        77,1,0,0,0,415,419,3,80,40,0,416,418,3,82,41,0,417,416,1,0,0,0,418,
+        421,1,0,0,0,419,417,1,0,0,0,419,420,1,0,0,0,420,79,1,0,0,0,421,419,
+        1,0,0,0,422,432,5,59,0,0,423,424,5,49,0,0,424,425,5,59,0,0,425,427,
+        5,11,0,0,426,428,3,84,42,0,427,426,1,0,0,0,427,428,1,0,0,0,428,429,
+        1,0,0,0,429,432,5,12,0,0,430,432,5,50,0,0,431,422,1,0,0,0,431,423,
+        1,0,0,0,431,430,1,0,0,0,432,81,1,0,0,0,433,435,5,11,0,0,434,436,
+        3,84,42,0,435,434,1,0,0,0,435,436,1,0,0,0,436,437,1,0,0,0,437,445,
+        5,12,0,0,438,439,5,51,0,0,439,440,3,54,27,0,440,441,5,52,0,0,441,
+        445,1,0,0,0,442,443,5,9,0,0,443,445,5,59,0,0,444,433,1,0,0,0,444,
+        438,1,0,0,0,444,442,1,0,0,0,445,83,1,0,0,0,446,451,3,54,27,0,447,
+        448,5,29,0,0,448,450,3,54,27,0,449,447,1,0,0,0,450,453,1,0,0,0,451,
+        449,1,0,0,0,451,452,1,0,0,0,452,85,1,0,0,0,453,451,1,0,0,0,454,463,
+        5,51,0,0,455,460,3,54,27,0,456,457,5,29,0,0,457,459,3,54,27,0,458,
+        456,1,0,0,0,459,462,1,0,0,0,460,458,1,0,0,0,460,461,1,0,0,0,461,
+        464,1,0,0,0,462,460,1,0,0,0,463,455,1,0,0,0,463,464,1,0,0,0,464,
+        465,1,0,0,0,465,466,5,52,0,0,466,87,1,0,0,0,467,472,3,90,45,0,468,
+        469,5,51,0,0,469,471,5,52,0,0,470,468,1,0,0,0,471,474,1,0,0,0,472,
+        470,1,0,0,0,472,473,1,0,0,0,473,89,1,0,0,0,474,472,1,0,0,0,475,476,
+        7,6,0,0,476,91,1,0,0,0,43,95,118,124,132,135,142,166,184,216,233,
+        236,240,253,257,267,275,282,287,296,302,308,314,322,337,345,352,
+        360,368,376,384,392,398,406,413,419,427,431,435,444,451,460,463,
+        472
     ]
 
 class CompiscriptParser ( Parser ):
@@ -195,9 +195,9 @@ class CompiscriptParser ( Parser ):
 
     literalNames = [ "<INVALID>", "'{'", "'}'", "'let'", "'var'", "';'", 
                      "'const'", "'='", "':'", "'.'", "'print'", "'('", "')'", 
-                     "'if'", "'else'", "'while'", "'do'", "'for'", "'foreach'", 
-                     "'in'", "'break'", "'continue'", "'return'", "'try'", 
-                     "'catch'", "'switch'", "'case'", "'default'", "'function'", 
+                     "'if'", "'else'", "'while'", "'do'", "'foreach'", "'in'", 
+                     "'break'", "'continue'", "'return'", "'try'", "'catch'", 
+                     "'for'", "'switch'", "'case'", "'default'", "'function'", 
                      "','", "'class'", "'?'", "'||'", "'&&'", "'=='", "'!='", 
                      "'<'", "'<='", "'>'", "'>='", "'+'", "'-'", "'*'", 
                      "'/'", "'%'", "'!'", "'null'", "'true'", "'false'", 
@@ -234,12 +234,12 @@ class CompiscriptParser ( Parser ):
     RULE_ifStatement = 10
     RULE_whileStatement = 11
     RULE_doWhileStatement = 12
-    RULE_forStatement = 13
-    RULE_foreachStatement = 14
-    RULE_breakStatement = 15
-    RULE_continueStatement = 16
-    RULE_returnStatement = 17
-    RULE_tryCatchStatement = 18
+    RULE_foreachStatement = 13
+    RULE_breakStatement = 14
+    RULE_continueStatement = 15
+    RULE_returnStatement = 16
+    RULE_tryCatchStatement = 17
+    RULE_forStatement = 18
     RULE_switchStatement = 19
     RULE_switchCase = 20
     RULE_defaultCase = 21
@@ -272,8 +272,8 @@ class CompiscriptParser ( Parser ):
                    "constantDeclaration", "typeAnnotation", "initializer", 
                    "assignment", "expressionStatement", "printStatement", 
                    "ifStatement", "whileStatement", "doWhileStatement", 
-                   "forStatement", "foreachStatement", "breakStatement", 
-                   "continueStatement", "returnStatement", "tryCatchStatement", 
+                   "foreachStatement", "breakStatement", "continueStatement", 
+                   "returnStatement", "tryCatchStatement", "forStatement", 
                    "switchStatement", "switchCase", "defaultCase", "functionDeclaration", 
                    "parameters", "parameter", "classDeclaration", "classMember", 
                    "expression", "assignmentExpr", "conditionalExpr", "logicalOrExpr", 
@@ -402,7 +402,7 @@ class CompiscriptParser ( Parser ):
             self.state = 95
             self._errHandler.sync(self)
             _la = self._input.LA(1)
-            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988962011851866) != 0):
+            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988962020502618) != 0):
                 self.state = 92
                 self.statement()
                 self.state = 97
@@ -691,7 +691,7 @@ class CompiscriptParser ( Parser ):
             self.state = 124
             self._errHandler.sync(self)
             _la = self._input.LA(1)
-            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988962011851866) != 0):
+            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988962020502618) != 0):
                 self.state = 121
                 self.statement()
                 self.state = 126
@@ -1349,112 +1349,6 @@ class CompiscriptParser ( Parser ):
         return localctx
 
 
-    class ForStatementContext(ParserRuleContext):
-        __slots__ = 'parser'
-
-        def __init__(self, parser, parent:ParserRuleContext=None, invokingState:int=-1):
-            super().__init__(parent, invokingState)
-            self.parser = parser
-
-        def block(self):
-            return self.getTypedRuleContext(CompiscriptParser.BlockContext,0)
-
-
-        def variableDeclaration(self):
-            return self.getTypedRuleContext(CompiscriptParser.VariableDeclarationContext,0)
-
-
-        def assignment(self):
-            return self.getTypedRuleContext(CompiscriptParser.AssignmentContext,0)
-
-
-        def expression(self, i:int=None):
-            if i is None:
-                return self.getTypedRuleContexts(CompiscriptParser.ExpressionContext)
-            else:
-                return self.getTypedRuleContext(CompiscriptParser.ExpressionContext,i)
-
-
-        def getRuleIndex(self):
-            return CompiscriptParser.RULE_forStatement
-
-        def enterRule(self, listener:ParseTreeListener):
-            if hasattr( listener, "enterForStatement" ):
-                listener.enterForStatement(self)
-
-        def exitRule(self, listener:ParseTreeListener):
-            if hasattr( listener, "exitForStatement" ):
-                listener.exitForStatement(self)
-
-        def accept(self, visitor:ParseTreeVisitor):
-            if hasattr( visitor, "visitForStatement" ):
-                return visitor.visitForStatement(self)
-            else:
-                return visitor.visitChildren(self)
-
-
-
-
-    def forStatement(self):
-
-        localctx = CompiscriptParser.ForStatementContext(self, self._ctx, self.state)
-        self.enterRule(localctx, 26, self.RULE_forStatement)
-        self._la = 0 # Token type
-        try:
-            self.enterOuterAlt(localctx, 1)
-            self.state = 200
-            self.match(CompiscriptParser.T__16)
-            self.state = 201
-            self.match(CompiscriptParser.T__10)
-            self.state = 205
-            self._errHandler.sync(self)
-            token = self._input.LA(1)
-            if token in [3, 4]:
-                self.state = 202
-                self.variableDeclaration()
-                pass
-            elif token in [11, 41, 45, 46, 47, 48, 49, 50, 51, 56, 59]:
-                self.state = 203
-                self.assignment()
-                pass
-            elif token in [5]:
-                self.state = 204
-                self.match(CompiscriptParser.T__4)
-                pass
-            else:
-                raise NoViableAltException(self)
-
-            self.state = 208
-            self._errHandler.sync(self)
-            _la = self._input.LA(1)
-            if (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988960619890688) != 0):
-                self.state = 207
-                self.expression()
-
-
-            self.state = 210
-            self.match(CompiscriptParser.T__4)
-            self.state = 212
-            self._errHandler.sync(self)
-            _la = self._input.LA(1)
-            if (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988960619890688) != 0):
-                self.state = 211
-                self.expression()
-
-
-            self.state = 214
-            self.match(CompiscriptParser.T__11)
-            self.state = 215
-            self.block()
-        except RecognitionException as re:
-            localctx.exception = re
-            self._errHandler.reportError(self, re)
-            self._errHandler.recover(self, re)
-        finally:
-            self.exitRule()
-        return localctx
-
-
     class ForeachStatementContext(ParserRuleContext):
         __slots__ = 'parser'
 
@@ -1496,22 +1390,22 @@ class CompiscriptParser ( Parser ):
     def foreachStatement(self):
 
         localctx = CompiscriptParser.ForeachStatementContext(self, self._ctx, self.state)
-        self.enterRule(localctx, 28, self.RULE_foreachStatement)
+        self.enterRule(localctx, 26, self.RULE_foreachStatement)
         try:
             self.enterOuterAlt(localctx, 1)
-            self.state = 217
-            self.match(CompiscriptParser.T__17)
-            self.state = 218
+            self.state = 200
+            self.match(CompiscriptParser.T__16)
+            self.state = 201
             self.match(CompiscriptParser.T__10)
-            self.state = 219
+            self.state = 202
             self.match(CompiscriptParser.Identifier)
-            self.state = 220
-            self.match(CompiscriptParser.T__18)
-            self.state = 221
+            self.state = 203
+            self.match(CompiscriptParser.T__17)
+            self.state = 204
             self.expression()
-            self.state = 222
+            self.state = 205
             self.match(CompiscriptParser.T__11)
-            self.state = 223
+            self.state = 206
             self.block()
         except RecognitionException as re:
             localctx.exception = re
@@ -1553,12 +1447,12 @@ class CompiscriptParser ( Parser ):
     def breakStatement(self):
 
         localctx = CompiscriptParser.BreakStatementContext(self, self._ctx, self.state)
-        self.enterRule(localctx, 30, self.RULE_breakStatement)
+        self.enterRule(localctx, 28, self.RULE_breakStatement)
         try:
             self.enterOuterAlt(localctx, 1)
-            self.state = 225
-            self.match(CompiscriptParser.T__19)
-            self.state = 226
+            self.state = 208
+            self.match(CompiscriptParser.T__18)
+            self.state = 209
             self.match(CompiscriptParser.T__4)
         except RecognitionException as re:
             localctx.exception = re
@@ -1600,12 +1494,12 @@ class CompiscriptParser ( Parser ):
     def continueStatement(self):
 
         localctx = CompiscriptParser.ContinueStatementContext(self, self._ctx, self.state)
-        self.enterRule(localctx, 32, self.RULE_continueStatement)
+        self.enterRule(localctx, 30, self.RULE_continueStatement)
         try:
             self.enterOuterAlt(localctx, 1)
-            self.state = 228
-            self.match(CompiscriptParser.T__20)
-            self.state = 229
+            self.state = 211
+            self.match(CompiscriptParser.T__19)
+            self.state = 212
             self.match(CompiscriptParser.T__4)
         except RecognitionException as re:
             localctx.exception = re
@@ -1650,21 +1544,21 @@ class CompiscriptParser ( Parser ):
     def returnStatement(self):
 
         localctx = CompiscriptParser.ReturnStatementContext(self, self._ctx, self.state)
-        self.enterRule(localctx, 34, self.RULE_returnStatement)
+        self.enterRule(localctx, 32, self.RULE_returnStatement)
         self._la = 0 # Token type
         try:
             self.enterOuterAlt(localctx, 1)
-            self.state = 231
-            self.match(CompiscriptParser.T__21)
-            self.state = 233
+            self.state = 214
+            self.match(CompiscriptParser.T__20)
+            self.state = 216
             self._errHandler.sync(self)
             _la = self._input.LA(1)
             if (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988960619890688) != 0):
-                self.state = 232
+                self.state = 215
                 self.expression()
 
 
-            self.state = 235
+            self.state = 218
             self.match(CompiscriptParser.T__4)
         except RecognitionException as re:
             localctx.exception = re
@@ -1715,19 +1609,125 @@ class CompiscriptParser ( Parser ):
     def tryCatchStatement(self):
 
         localctx = CompiscriptParser.TryCatchStatementContext(self, self._ctx, self.state)
-        self.enterRule(localctx, 36, self.RULE_tryCatchStatement)
+        self.enterRule(localctx, 34, self.RULE_tryCatchStatement)
         try:
             self.enterOuterAlt(localctx, 1)
-            self.state = 237
-            self.match(CompiscriptParser.T__22)
-            self.state = 238
+            self.state = 220
+            self.match(CompiscriptParser.T__21)
+            self.state = 221
             self.block()
-            self.state = 239
-            self.match(CompiscriptParser.T__23)
-            self.state = 240
+            self.state = 222
+            self.match(CompiscriptParser.T__22)
+            self.state = 223
             self.match(CompiscriptParser.T__10)
-            self.state = 241
+            self.state = 224
             self.match(CompiscriptParser.Identifier)
+            self.state = 225
+            self.match(CompiscriptParser.T__11)
+            self.state = 226
+            self.block()
+        except RecognitionException as re:
+            localctx.exception = re
+            self._errHandler.reportError(self, re)
+            self._errHandler.recover(self, re)
+        finally:
+            self.exitRule()
+        return localctx
+
+
+    class ForStatementContext(ParserRuleContext):
+        __slots__ = 'parser'
+
+        def __init__(self, parser, parent:ParserRuleContext=None, invokingState:int=-1):
+            super().__init__(parent, invokingState)
+            self.parser = parser
+
+        def block(self):
+            return self.getTypedRuleContext(CompiscriptParser.BlockContext,0)
+
+
+        def variableDeclaration(self):
+            return self.getTypedRuleContext(CompiscriptParser.VariableDeclarationContext,0)
+
+
+        def assignment(self):
+            return self.getTypedRuleContext(CompiscriptParser.AssignmentContext,0)
+
+
+        def expression(self, i:int=None):
+            if i is None:
+                return self.getTypedRuleContexts(CompiscriptParser.ExpressionContext)
+            else:
+                return self.getTypedRuleContext(CompiscriptParser.ExpressionContext,i)
+
+
+        def getRuleIndex(self):
+            return CompiscriptParser.RULE_forStatement
+
+        def enterRule(self, listener:ParseTreeListener):
+            if hasattr( listener, "enterForStatement" ):
+                listener.enterForStatement(self)
+
+        def exitRule(self, listener:ParseTreeListener):
+            if hasattr( listener, "exitForStatement" ):
+                listener.exitForStatement(self)
+
+        def accept(self, visitor:ParseTreeVisitor):
+            if hasattr( visitor, "visitForStatement" ):
+                return visitor.visitForStatement(self)
+            else:
+                return visitor.visitChildren(self)
+
+
+
+
+    def forStatement(self):
+
+        localctx = CompiscriptParser.ForStatementContext(self, self._ctx, self.state)
+        self.enterRule(localctx, 36, self.RULE_forStatement)
+        self._la = 0 # Token type
+        try:
+            self.enterOuterAlt(localctx, 1)
+            self.state = 228
+            self.match(CompiscriptParser.T__23)
+            self.state = 229
+            self.match(CompiscriptParser.T__10)
+            self.state = 233
+            self._errHandler.sync(self)
+            token = self._input.LA(1)
+            if token in [3, 4]:
+                self.state = 230
+                self.variableDeclaration()
+                pass
+            elif token in [11, 41, 45, 46, 47, 48, 49, 50, 51, 56, 59]:
+                self.state = 231
+                self.assignment()
+                pass
+            elif token in [5]:
+                self.state = 232
+                self.match(CompiscriptParser.T__4)
+                pass
+            else:
+                raise NoViableAltException(self)
+
+            self.state = 236
+            self._errHandler.sync(self)
+            _la = self._input.LA(1)
+            if (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988960619890688) != 0):
+                self.state = 235
+                self.expression()
+
+
+            self.state = 238
+            self.match(CompiscriptParser.T__4)
+            self.state = 240
+            self._errHandler.sync(self)
+            _la = self._input.LA(1)
+            if (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988960619890688) != 0):
+                self.state = 239
+                self.expression()
+
+
             self.state = 242
             self.match(CompiscriptParser.T__11)
             self.state = 243
@@ -1883,7 +1883,7 @@ class CompiscriptParser ( Parser ):
             self.state = 267
             self._errHandler.sync(self)
             _la = self._input.LA(1)
-            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988962011851866) != 0):
+            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988962020502618) != 0):
                 self.state = 264
                 self.statement()
                 self.state = 269
@@ -1947,7 +1947,7 @@ class CompiscriptParser ( Parser ):
             self.state = 275
             self._errHandler.sync(self)
             _la = self._input.LA(1)
-            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988962011851866) != 0):
+            while (((_la) & ~0x3f) == 0 and ((1 << _la) & 652988962020502618) != 0):
                 self.state = 272
                 self.statement()
                 self.state = 277

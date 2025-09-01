@@ -125,15 +125,6 @@ class CompiscriptListener(ParseTreeListener):
         pass
 
 
-    # Enter a parse tree produced by CompiscriptParser#forStatement.
-    def enterForStatement(self, ctx:CompiscriptParser.ForStatementContext):
-        pass
-
-    # Exit a parse tree produced by CompiscriptParser#forStatement.
-    def exitForStatement(self, ctx:CompiscriptParser.ForStatementContext):
-        pass
-
-
     # Enter a parse tree produced by CompiscriptParser#foreachStatement.
     def enterForeachStatement(self, ctx:CompiscriptParser.ForeachStatementContext):
         pass
@@ -176,6 +167,15 @@ class CompiscriptListener(ParseTreeListener):
 
     # Exit a parse tree produced by CompiscriptParser#tryCatchStatement.
     def exitTryCatchStatement(self, ctx:CompiscriptParser.TryCatchStatementContext):
+        pass
+
+
+    # Enter a parse tree produced by CompiscriptParser#forStatement.
+    def enterForStatement(self, ctx:CompiscriptParser.ForStatementContext):
+        pass
+
+    # Exit a parse tree produced by CompiscriptParser#forStatement.
+    def exitForStatement(self, ctx:CompiscriptParser.ForStatementContext):
         pass
 
 

@@ -142,6 +142,22 @@ class ForEachStmt(ASTNode):
 @dataclass
 class ReturnStmt(ASTNode):
     expr: Optional['ASTNode'] = None
+    
+    
+@dataclass
+class SwitchCase(ASTNode):
+    literal : ASTNode = None
+    case_block : Block = None
+@dataclass
+class DefaultCase(ASTNode):
+    default_block : Block = None
+
+@dataclass
+class SwitchStatement(ASTNode):
+    variable : 'ASTNode' = None
+    cases : List['ASTNode']  = field(default_factory=list)
+    default : Optional['DefaultCase'] = None
+    
 
 def _iter_children(n: Any) -> Iterable[ASTNode]:
     if not is_dataclass(n): return

@@ -31,7 +31,7 @@ services:
       dockerfile: Dockerfile
     container_name: the-compiler-prod
     working_dir: /app
-    command: python service.py
+    command: python server/server.py
     restart: unless-stopped
 
 volumes:

@@ -74,11 +74,6 @@ class CompiscriptVisitor(ParseTreeVisitor):
         return self.visitChildren(ctx)
 
 
-    # Visit a parse tree produced by CompiscriptParser#forStatement.
-    def visitForStatement(self, ctx:CompiscriptParser.ForStatementContext):
-        return self.visitChildren(ctx)
-
-
     # Visit a parse tree produced by CompiscriptParser#foreachStatement.
     def visitForeachStatement(self, ctx:CompiscriptParser.ForeachStatementContext):
         return self.visitChildren(ctx)
@@ -101,6 +96,11 @@ class CompiscriptVisitor(ParseTreeVisitor):
 
     # Visit a parse tree produced by CompiscriptParser#tryCatchStatement.
     def visitTryCatchStatement(self, ctx:CompiscriptParser.TryCatchStatementContext):
+        return self.visitChildren(ctx)
+
+
+    # Visit a parse tree produced by CompiscriptParser#forStatement.
+    def visitForStatement(self, ctx:CompiscriptParser.ForStatementContext):
         return self.visitChildren(ctx)
 
 

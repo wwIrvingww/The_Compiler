@@ -118,3 +118,14 @@ class SymbolTable:
 
     def clear_errors(self) -> None:
         self._errors.clear()
+
+    def define_class(self, name: str, attributes: Dict[str, Symbol], methods: Dict[str, Symbol]):
+        if self.lookup(name):
+            raise KeyError(f"Clase '{name}' ya definida")
+        self.scopes[-1][name] = Symbol(name, "class", metadata={"attributes": attributes, "methods": methods})
+
+    def lookup_class(self, name: str) -> Optional[Symbol]:
+        sym = self.lookup(name)
+        if sym and sym.type == "class":
+            return sym
+        return None

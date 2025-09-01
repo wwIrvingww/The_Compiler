@@ -140,6 +140,32 @@ class Call(ASTNode):
     callee: Identifier = None  # type: ignore
     args: List[ASTNode] = field(default_factory=list)
 
+@dataclass
+class ClassDecl(ASTNode):
+    name: str = ""
+    members: List[ASTNode] = field(default_factory=list)  # FuncDecl, VarDecl, etc.
+
+@dataclass
+class MethodDecl(ASTNode):
+    name: str = ""
+    params: List[tuple] = field(default_factory=list)
+    ret: Optional[Type] = None
+    body: Block = None  # type: ignore
+
+@dataclass
+class PropertyAccess(ASTNode):
+    obj: ASTNode = None  # type: ignore
+    prop: str = ""
+
+@dataclass
+class ThisExpr(ASTNode):
+    pass
+
+@dataclass
+class NewExpr(ASTNode):
+    class_name: str = ""
+    args: List[ASTNode] = field(default_factory=list)
+
 def _label(n: ASTNode) -> str:
     # Etiquetas girlie pop por tipo
     if isinstance(n, Program):     return "Program"
@@ -165,6 +191,13 @@ def _label(n: ASTNode) -> str:
         ps = ", ".join(f"{p}:{t}" for p, t in n.params)
         return f"FuncDecl {n.name}({ps}) : {n.ret}"
     if isinstance(n, Call):        return f"Call {n.callee.name}() ty={n.ty}"
+    if isinstance(n, ClassDecl):   return f"ClassDecl {n.name}"
+    if isinstance(n, MethodDecl):
+        ps = ", ".join(f"{p}:{t}" for p, t in n.params)
+        return f"MethodDecl {n.name}({ps}) : {n.ret}"
+    if isinstance(n, PropertyAccess): return f"PropertyAccess .{n.prop} ty={n.ty}"
+    if isinstance(n, ThisExpr):    return f"ThisExpr ty={n.ty}"
+    if isinstance(n, NewExpr):     return f"NewExpr {n.class_name}() ty={n.ty}"
     return type(n).__name__
 
 def render_ascii(root: ASTNode) -> str:

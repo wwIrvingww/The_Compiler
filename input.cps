@@ -1,5 +1,6 @@
-let tem = 10;
-if(tem%2 == 0){
-    tem = tem -2;
-    break;
+let arr : integer[][] = [[1,2],[3,4]];
+let odd_amount = 0;
+foreach(num in arr){
+    print("what");
+    odd_amount = num[1] * 5;
 }

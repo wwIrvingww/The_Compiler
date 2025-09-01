@@ -122,6 +122,7 @@ class IfStmt(ASTNode):
 
 @dataclass
 class WhileStmt(ASTNode):
+    is_do_while : bool = False
     cond: 'ASTNode' = None  # type: ignore
     body: Block = None  # type: ignore
 
@@ -131,7 +132,13 @@ class ForStmt(ASTNode):
     cond: 'ASTNode' = None
     update: 'ASTNode' = None
     body: Block= None
-    
+
+@dataclass
+class ForEachStmt(ASTNode):
+    array: 'ASTNode' = None
+    item: 'ASTNode' = None
+    body: Block = None    
+
 @dataclass
 class ReturnStmt(ASTNode):
     expr: Optional['ASTNode'] = None
@@ -205,7 +212,10 @@ def _label(n: ASTNode) -> str:
 
     if isinstance(n, PrintStmt):   return "PrintStmt"
     if isinstance(n, IfStmt):      return "IfStmt"
-    if isinstance(n, WhileStmt):   return "WhileStmt"
+    if isinstance(n, WhileStmt):   
+        if (n.is_do_while):
+            return "DoWhileStmt"
+        return "WhileStmt"
     
     if isinstance(n, ForStmt):
         return f"ForLoop "

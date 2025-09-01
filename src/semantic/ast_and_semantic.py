@@ -73,6 +73,8 @@ class AstAndSemantic(CompiscriptListener):
         self._class_frames: list = []
         self.func_ret_stack: List[Type] = [] #Agregar un stack para validar los returns
         self.inter_counter : int = 0
+        self.init_foreach_identifyer_flag : bool  = False
+        self.foreach_item_stack : List[str] = []
 
     def _error(self, ctx, msg):
         line = getattr(ctx.start, "line", 1)
@@ -310,7 +312,6 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = PrintStmt(expr=expr_node, ty=NULL)
 
     def exitIfStatement(self, ctx: CompiscriptParser.IfStatementContext):
-
         # localizar la condición
         cond_ctx = None
         try:
@@ -324,14 +325,14 @@ class AstAndSemantic(CompiscriptListener):
 
         cond_text = cond_ctx.getText()
         cond_ty = self.types.get(cond_ctx, None)
+        
         try:
             is_bool = (cond_ty == BOOL)
         except NameError:
             is_bool = False
 
         if not is_bool and cond_text not in ("true", "false"):
-            line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
-            self.errors.append(f"[linea {line}] condicion de 'if' debe ser boolean: '{cond_text}'")
+            self._error(ctx, msg=f"condicion de 'if' debe ser boolean, no \'{cond_ty}\': '{cond_text}'")
             return
         
         if_blocks = [b for b in ctx.block()]
@@ -356,10 +357,60 @@ class AstAndSemantic(CompiscriptListener):
         node = IfStmt(
             ty=NULL,
             cond = self.ast.get(cond_ctx),
-            then_block=then_block,
+            then_block= then_block,
             else_block= else_block if else_block else None
         )
         self.ast[ctx] = node
+        
+        
+        
+    # ---------------------------------- #
+    #       Iterative Statements         #
+    # -----------------------------------#
+    
+    def enterDoWhileStatement(self, ctx):
+        self.inter_counter+=1;
+    def exitDoWhileStatement(self, ctx: CompiscriptParser.DoWhileStatementContext):
+        """
+        Exige que la condición del while sea booleana.
+        Intenta primero con inferencia de tipos; si no hay tipo, cae a literal 'true'/'false'.
+        """
+        cond_ctx = None
+        try:
+            # muchas gramáticas exponen la condición como expression()
+            exprs = ctx.expression()
+            cond_ctx = exprs if not isinstance(exprs, list) else (exprs[0] if exprs else None)
+        except Exception:
+            cond_ctx = None
+
+        if cond_ctx is None:
+            return  # si la gramática no ofrece la condición aquí, no generamos error
+
+        cond_text = cond_ctx.getText()
+        cond_ty = self.types.get(cond_ctx, None)
+
+        # Si tenemos sistema de tipos y BOOL está definido:
+        try:
+            is_bool = (cond_ty == BOOL)
+        except NameError:
+            is_bool = False
+
+        # Fallback literal
+        if not is_bool:
+            if cond_text not in ("true", "false"):
+                line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
+                self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
+            
+        stmts = [self.ast.get(s) for s in ctx.block().statement()]
+        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        while_node = WhileStmt(
+            ty=NULL,
+            is_do_while=True,
+            cond = self.ast.get(cond_ctx),
+            body=block_node
+        )
+        self.ast[ctx] = while_node
+        self.inter_counter-=1
         
     def enterWhileStatement(self, ctx):
         self.inter_counter+=1;
@@ -393,6 +444,16 @@ class AstAndSemantic(CompiscriptListener):
             if cond_text not in ("true", "false"):
                 line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
                 self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
+                
+        stmts = [self.ast.get(s) for s in ctx.block().statement()]
+        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        while_node = WhileStmt(
+            ty=NULL,
+            is_do_while=False,
+            cond = self.ast.get(cond_ctx),
+            body=block_node
+        )
+        self.ast[ctx] = while_node
         self.inter_counter-=1
 
     def enterForStatement(self, ctx):
@@ -447,8 +508,69 @@ class AstAndSemantic(CompiscriptListener):
         )
         self.ast[ctx] = forNode
         self.inter_counter-=1
+    
+    def enterForeachStatement(self, ctx):
+        self.init_foreach_identifyer_flag = True
         
+        ## Array preparation
+        arr_ctx = ctx.expression()
+        arr_sym = self.table.lookup(arr_ctx.getText())
+        
+        if (not arr_sym):
+            self._error(ctx, f"no se pudo determinar la lista {ctx.expression().getText()}")
+            return
+    
+        arr_type = arr_sym.type
+        
+        if not is_list(arr_type):
+            self._error(ctx, f"condicion \'foreach\' espera tipo lista, se obtuvo {array_node.ty}")
+            return
+    
+        # Item preparation
+        item_name = ctx.Identifier().getText()
+        item_ty = index(arr_type)
+        self._define_symbol(
+            name_or_symbol=str(item_name),
+            ty = item_ty,
+            err_ctx=ctx.Identifier()
+        )
+        self.inter_counter+=1;
+        
+    def exitForeachStatement(self, ctx: CompiscriptParser.ForeachStatementContext):
+        """
+        Exige que la condición del for sea booleana.
+        Soporta for estilo Python (<item> in <array>)
+        """
+        # Array iterator:
+        array_ctx = ctx.expression()
+        array_node = self.ast.get(array_ctx)
+        # item iterator 
+               
+        item_name = ctx.Identifier().getText()
+        item_ty = index(array_node.ty)
 
+        item_node = VarDecl(
+            ty=item_ty,
+            declared_type=item_ty,
+            name=item_name
+        )
+
+        stmts = [self.ast.get(s) for s in ctx.block().statement()]
+        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        fore_node = ForEachStmt(
+            ty=NULL,
+            array=array_node,
+            item = item_node,
+            body=block_node
+        )
+
+        self.ast[ctx] = fore_node
+        self.inter_counter-=1
+        return
+    # ---------------------------------- #
+    #          Other Statements          #
+    # -----------------------------------#
+    
     def exitReturnStatement(self, ctx: CompiscriptParser.ReturnStatementContext):
         actual_ty = NULL
         rn = None
@@ -532,6 +654,9 @@ class AstAndSemantic(CompiscriptListener):
         name = ctx.Identifier().getText()
         sym = self.table.lookup(name)
         if sym is None:
+            if self.init_foreach_identifyer_flag:
+                self.foreach_item_stack.append(name)
+                return
             self.errors.append(f"Identificador no declarado: '{name}'")
             node = Identifier(name=name, ty=ERROR)
             ty = ERROR

@@ -1,24 +1,84 @@
-// Caso 1: variable no declarada
-b = 10;   // ❌ debería marcar: variable 'b' no declarada
+// control_flujo.cps
+// ========================================================
+// 1) Condiciones en if / while / do-while / for / switch
+//    deben ser booleanas
+// ========================================================
 
-// Caso 2: redeclaración de variable en mismo ámbito
-let a: integer = 1;
-let a: integer = 2;   // ❌ ya está definido en el ambito actual
-
-// Caso 3: función redeclarada
-function f(x: integer): integer {
-    return x;
-}
-function f(y: integer): integer {  // ❌ redeclaración de función 'f'
-    return y;
-}
-// Caso 4: return fuera de función
-return 5;  // ❌ 'return' fuera de funcion
-// Caso 5: if 
+// --- IF ---
 if (8):
+    print              // ❌ Esperado: condicion de 'if' no es boolean: '8'
+
+if (true):
+    print              // ✅ no error
+
+// --- WHILE ---
+while (0):
+    print              // ❌ Esperado: condicion de 'while' no es boolean: '0'
+
+while (false):
+    print              // ✅ no error
+
+// --- FOR ---
+for (1):
+    print              // ❌ Esperado: condicion de 'for' no es boolean: '1'
+
+let i: integer = 0;
+for (i = 0; i; i = i + 1):
+    print              // ❌ Esperado: condicion de 'for' no es boolean: 'i'
+
+for (i = 0; true; i = i + 1):
+    break              // ✅ condición booleana
+
+// --- DO-WHILE ---
+do:
     print
-while (8):
-for (8):
-// Caso correcto: declaración y uso
-let c: integer = 5;
-c = 7;  // ✅ no debería marcar error
+while (0);             // ❌ Esperado: condicion de 'while' no es boolean: '0'
+
+do:
+    print
+while (true);          // ✅
+
+// --- SWITCH ---
+switch (1):            // ❌ si tu regla exige boolean, aquí debe marcar
+    case true:
+        print
+    default:
+        print
+
+switch (false):        // ✅
+    default:
+        print
+
+
+
+// ========================================================
+// 2) Validar que break / continue solo dentro de bucles
+// ========================================================
+
+break;                 // ❌ Esperado: 'break' fuera de bucle
+continue;              // ❌ Esperado: 'continue' fuera de bucle
+
+while (true):
+    break              // ✅ permitido en bucle
+
+while (true):
+    continue           // ✅ permitido en bucle
+
+
+
+// ========================================================
+// 3) Validar que return esté dentro de una función
+// ========================================================
+
+return 5;              // ❌ Esperado: 'return' fuera de funcion'
+
+// Válido: return dentro de función
+function id(x: integer): integer {
+    return x;          // ✅
+}
+
+// Extra: return dentro de bucle (válido porque está dentro de función)
+function first(): integer {
+    while (true):
+        return 1       // ✅
+}

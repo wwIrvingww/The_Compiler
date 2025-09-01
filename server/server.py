@@ -1,12 +1,29 @@
 # server/server.py
+# --- bootstrap sys.path para que 'parser' (en src/) sea importable ---
+import os, sys
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))          # .../server
+_REPO_ROOT = os.path.abspath(os.path.join(_THIS_DIR, os.pardir))# repo root
+_SRC_DIR = os.path.join(_REPO_ROOT, "src")
+# Asegura que src/ y server/ estén en sys.path
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+if _THIS_DIR not in sys.path:
+    sys.path.insert(0, _THIS_DIR)
+
 import sys
 import logging
 import pathlib
 
 from pygls.server import LanguageServer
-from pygls.lsp.types import Diagnostic, DiagnosticSeverity, Position, Range
+from pygls.lsp.types import SemanticTokensLegend, SemanticTokensParams, SemanticTokens, SemanticTokensRegistrationOptions
 from pygls.uris import to_fs_path
 from urllib.parse import urlparse, unquote
+
+from pygls.lsp.methods import TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL
+from pygls.lsp.types import SemanticTokensParams, SemanticTokens
+from pygls.lsp.types import Diagnostic, DiagnosticSeverity, Range, Position
+
+from handlers import SEM_LEGEND, build_semantic_tokens, build_diagnostics
 
 
 
@@ -70,43 +87,52 @@ def did_save(ls, params):
         code = ""
     validate_and_publish(uri, code)
 
-def build_diagnostics(text: str, errors: list[str]) -> list[Diagnostic]:
-    import re
-    diags: list[Diagnostic] = []
-    lines = text.splitlines()
+@ls.feature(
+    TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL,
+    SemanticTokensRegistrationOptions(legend=SEM_LEGEND, full=True)
+)
+def semantic_tokens_full(params: SemanticTokensParams) -> SemanticTokens:
+    doc = ls.workspace.get_document(params.text_document.uri)
+    return build_semantic_tokens(doc.source)
 
-    for msg in errors:
-        # intenta extraer la línea: "[linea 3]" o "línea 3"
-        m = re.search(r"(?:\[\s*linea\s*(\d+)\s*\])|(?:l[íi]nea\s+(\d+))", msg, re.IGNORECASE)
-        line = (int(next(g for g in m.groups() if g)) - 1) if m else 0
 
-        # intenta subrayar el lexema entre comillas '...'
-        start_col = 0
-        end_col = 1
-        if 0 <= line < len(lines):
-            lex = None
-            t = re.search(r"'([^']+)'", msg)
-            if t:
-                lex = t.group(1)
-            if lex is not None:
-                pos = lines[line].find(lex)
-                if pos >= 0:
-                    start_col = pos
-                    end_col = pos + len(lex)
-                else:
-                    end_col = max(1, len(lines[line]))
-            else:
-                end_col = max(1, len(lines[line]))
+# def build_diagnostics(text: str, errors: list[str]) -> list[Diagnostic]:
+#     import re
+#     diags: list[Diagnostic] = []
+#     lines = text.splitlines()
 
-        diags.append(Diagnostic(
-            range=Range(
-                start=Position(line=line, character=start_col),
-                end=Position(line=line, character=end_col)
-            ),
-            message=msg,
-            severity=DiagnosticSeverity.Error
-        ))
-    return diags
+#     for msg in errors:
+#         # intenta extraer la línea: "[linea 3]" o "línea 3"
+#         m = re.search(r"(?:\[\s*linea\s*(\d+)\s*\])|(?:l[íi]nea\s+(\d+))", msg, re.IGNORECASE)
+#         line = (int(next(g for g in m.groups() if g)) - 1) if m else 0
+
+#         # intenta subrayar el lexema entre comillas '...'
+#         start_col = 0
+#         end_col = 1
+#         if 0 <= line < len(lines):
+#             lex = None
+#             t = re.search(r"'([^']+)'", msg)
+#             if t:
+#                 lex = t.group(1)
+#             if lex is not None:
+#                 pos = lines[line].find(lex)
+#                 if pos >= 0:
+#                     start_col = pos
+#                     end_col = pos + len(lex)
+#                 else:
+#                     end_col = max(1, len(lines[line]))
+#             else:
+#                 end_col = max(1, len(lines[line]))
+
+#         diags.append(Diagnostic(
+#             range=Range(
+#                 start=Position(line=line, character=start_col),
+#                 end=Position(line=line, character=end_col)
+#             ),
+#             message=msg,
+#             severity=DiagnosticSeverity.Error
+#         ))
+#     return diags
 
 
 def validate_and_publish(uri: str, code: str):

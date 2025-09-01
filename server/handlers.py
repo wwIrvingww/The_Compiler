@@ -24,25 +24,47 @@ from parser.CompiscriptParser import CompiscriptParser
 # 1) Construcción de diagnósticos
 # -------------------------
 
-_LINE_RE = re.compile(r"\[linea\s+(\d+)\]")  # extrae "[linea 3]" -> 3
+# server/handlers.py
+from pygls.lsp.types import Diagnostic, DiagnosticSeverity, Range, Position
+import re
 
-def build_diagnostics(text: str, errors: List[str]) -> List[Diagnostic]:
+# Acepta tanto "[linea N]" como "[line N]"
+_LINE_RE = re.compile(r"\[(?:linea|line)\s+(\d+)\]", re.IGNORECASE)
+
+# Para resaltar solo el fragmento entre comillas si existe: 'ident', '8', etc.
+_SNIPPET_RE = re.compile(r"'([^']+)'")
+
+def build_diagnostics(text: str, errors: list[str]) -> list[Diagnostic]:
     lines = text.splitlines()
-    out: List[Diagnostic] = []
+    out: list[Diagnostic] = []
+
     for msg in errors:
+        # 1) línea (1-based -> 0-based)
         m = _LINE_RE.search(msg)
         line_idx = max(int(m.group(1)) - 1, 0) if m else 0
-        start = Position(line=line_idx, character=0)
-        end = Position(
-            line=line_idx,
-            character=len(lines[line_idx]) if 0 <= line_idx < len(lines) else 0,
-        )
+
+        # 2) columna: intenta resaltar el 'snippet' si el msg lo trae en comillas
+        start_char = 0
+        end_char = len(lines[line_idx]) if 0 <= line_idx < len(lines) else 0
+
+        n = _SNIPPET_RE.search(msg)
+        if n and 0 <= line_idx < len(lines):
+            snippet = n.group(1)
+            col = lines[line_idx].find(snippet)
+            if col != -1:
+                start_char = col
+                end_char = col + len(snippet)
+
         out.append(Diagnostic(
-            range=Range(start=start, end=end),
+            range=Range(
+                start=Position(line=line_idx, character=start_char),
+                end=Position(line=line_idx, character=end_char),
+            ),
             message=msg,
             severity=DiagnosticSeverity.Error,
             source="compiscript",
         ))
+
     return out
 
 

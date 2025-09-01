@@ -16,14 +16,14 @@ import pathlib
 
 from pygls.server import LanguageServer
 from pygls.lsp.types import SemanticTokensLegend, SemanticTokensParams, SemanticTokens, SemanticTokensRegistrationOptions
-from handlers import SEM_LEGEND, build_semantic_tokens
 from pygls.uris import to_fs_path
 from urllib.parse import urlparse, unquote
 
-from handlers import SEM_LEGEND, build_semantic_tokens
 from pygls.lsp.methods import TEXT_DOCUMENT_SEMANTIC_TOKENS_FULL
 from pygls.lsp.types import SemanticTokensParams, SemanticTokens
 from pygls.lsp.types import Diagnostic, DiagnosticSeverity, Range, Position
+
+from handlers import SEM_LEGEND, build_semantic_tokens, build_diagnostics
 
 
 
@@ -96,43 +96,43 @@ def semantic_tokens_full(params: SemanticTokensParams) -> SemanticTokens:
     return build_semantic_tokens(doc.source)
 
 
-def build_diagnostics(text: str, errors: list[str]) -> list[Diagnostic]:
-    import re
-    diags: list[Diagnostic] = []
-    lines = text.splitlines()
+# def build_diagnostics(text: str, errors: list[str]) -> list[Diagnostic]:
+#     import re
+#     diags: list[Diagnostic] = []
+#     lines = text.splitlines()
 
-    for msg in errors:
-        # intenta extraer la línea: "[linea 3]" o "línea 3"
-        m = re.search(r"(?:\[\s*linea\s*(\d+)\s*\])|(?:l[íi]nea\s+(\d+))", msg, re.IGNORECASE)
-        line = (int(next(g for g in m.groups() if g)) - 1) if m else 0
+#     for msg in errors:
+#         # intenta extraer la línea: "[linea 3]" o "línea 3"
+#         m = re.search(r"(?:\[\s*linea\s*(\d+)\s*\])|(?:l[íi]nea\s+(\d+))", msg, re.IGNORECASE)
+#         line = (int(next(g for g in m.groups() if g)) - 1) if m else 0
 
-        # intenta subrayar el lexema entre comillas '...'
-        start_col = 0
-        end_col = 1
-        if 0 <= line < len(lines):
-            lex = None
-            t = re.search(r"'([^']+)'", msg)
-            if t:
-                lex = t.group(1)
-            if lex is not None:
-                pos = lines[line].find(lex)
-                if pos >= 0:
-                    start_col = pos
-                    end_col = pos + len(lex)
-                else:
-                    end_col = max(1, len(lines[line]))
-            else:
-                end_col = max(1, len(lines[line]))
+#         # intenta subrayar el lexema entre comillas '...'
+#         start_col = 0
+#         end_col = 1
+#         if 0 <= line < len(lines):
+#             lex = None
+#             t = re.search(r"'([^']+)'", msg)
+#             if t:
+#                 lex = t.group(1)
+#             if lex is not None:
+#                 pos = lines[line].find(lex)
+#                 if pos >= 0:
+#                     start_col = pos
+#                     end_col = pos + len(lex)
+#                 else:
+#                     end_col = max(1, len(lines[line]))
+#             else:
+#                 end_col = max(1, len(lines[line]))
 
-        diags.append(Diagnostic(
-            range=Range(
-                start=Position(line=line, character=start_col),
-                end=Position(line=line, character=end_col)
-            ),
-            message=msg,
-            severity=DiagnosticSeverity.Error
-        ))
-    return diags
+#         diags.append(Diagnostic(
+#             range=Range(
+#                 start=Position(line=line, character=start_col),
+#                 end=Position(line=line, character=end_col)
+#             ),
+#             message=msg,
+#             severity=DiagnosticSeverity.Error
+#         ))
+#     return diags
 
 
 def validate_and_publish(uri: str, code: str):

@@ -1,1 +1,10 @@
-{ "compiscript.pythonPath": "${workspaceFolder}\\\\.venv\\\\Scripts\\\\python.exe" }
+{
+  "editor.semanticHighlighting.enabled": true,
+  "editor.semanticTokenColorCustomizations": {
+    "rules": {
+      "variable": "#f7d774",
+      "function": "#82aaff",
+      "parameter": "#72d572"
+    }
+  }
+}

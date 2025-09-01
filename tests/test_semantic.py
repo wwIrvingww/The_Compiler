@@ -115,3 +115,36 @@ def test_ternary_condition_must_be_boolean():
     errors, _ = run_semantic(code)
     # Si ya renombraste a exitTernaryExpr(...) esto debería aparecer
     assert any("La condicion del operador ternario debe ser boolean" in e for e in errors), errors
+
+
+def test_continue_dentro_iter():
+    code = """
+    let tem = 1;
+    for(let i = 0; i<3; i = i+1){
+        tem = i;
+        while(tem < i){
+            tem = tem - 1;
+            if(tem%2 == 0){
+                tem = tem -2;
+                break;
+            }
+        }
+        continue;
+    }
+    """
+    errors, _ = run_semantic(code)
+    assert len(errors) == 0
+    
+
+def test_continue_dentro_fuera():
+    code = """let tem = 10;
+    if(tem%2 == 0){
+        tem = tem -2;
+        break;
+    }
+    continue;
+    """
+    errors, _ = run_semantic(code)
+    assert errors[0] == "[line 4] llamada a 'break' invalida fuera iterador"
+    assert errors[1] == "[line 6] llamada a 'continue' invalida fuera iterador"
+    print(errors)

@@ -72,6 +72,7 @@ class AstAndSemantic(CompiscriptListener):
         self.current_method: Optional[str] = None
         self._class_frames: list = []
         self.func_ret_stack: List[Type] = [] #Agregar un stack para validar los returns
+        self.inter_counter : int = 0
 
     def _error(self, ctx, msg):
         line = getattr(ctx.start, "line", 1)
@@ -309,6 +310,7 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = PrintStmt(expr=expr_node, ty=NULL)
 
     def exitIfStatement(self, ctx: CompiscriptParser.IfStatementContext):
+
         # localizar la condición
         cond_ctx = None
         try:
@@ -330,7 +332,37 @@ class AstAndSemantic(CompiscriptListener):
         if not is_bool and cond_text not in ("true", "false"):
             line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
             self.errors.append(f"[linea {line}] condicion de 'if' debe ser boolean: '{cond_text}'")
-
+            return
+        
+        if_blocks = [b for b in ctx.block()]
+        
+        then_block = None
+        else_block = None
+        if (len(if_blocks) == 1):
+            stmts = [self.ast.get(s) for s in if_blocks[0].statement()]
+            then_block = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+            # just then block
+            pass
+        elif (len(if_blocks) == 2):
+            stmts1 = [self.ast.get(s) for s in if_blocks[0].statement()]
+            then_block = Block(statements=[s for s in stmts1 if s is not None], ty=NULL)
+            stmts2 = [self.ast.get(s) for s in if_blocks[1].statement()]
+            else_block = Block(statements=[s for s in stmts2 if s is not None], ty=NULL)
+            # then and else blocks
+            pass
+        else:
+            self._error(ctx, msg=f"condicion \'if\' no puede tener {len(if_blocks)} bloques")
+            return
+        node = IfStmt(
+            ty=NULL,
+            cond = self.ast.get(cond_ctx),
+            then_block=then_block,
+            else_block= else_block if else_block else None
+        )
+        self.ast[ctx] = node
+        
+    def enterWhileStatement(self, ctx):
+        self.inter_counter+=1;
     def exitWhileStatement(self, ctx: CompiscriptParser.WhileStatementContext):
         """
         Exige que la condición del while sea booleana.
@@ -361,14 +393,15 @@ class AstAndSemantic(CompiscriptListener):
             if cond_text not in ("true", "false"):
                 line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
                 self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
+        self.inter_counter-=1
 
-
+    def enterForStatement(self, ctx):
+        self.inter_counter+=1;
     def exitForStatement(self, ctx: CompiscriptParser.ForStatementContext):
         """
         Exige que la condición del for sea booleana.
         Soporta for estilo C (init; cond; update) y variantes con una sola expresión entre paréntesis.
         """
-        print("Leaving for...")
         cond_ctx = None
         update_ctx = None
         try:
@@ -413,8 +446,8 @@ class AstAndSemantic(CompiscriptListener):
             body=block_node
         )
         self.ast[ctx] = forNode
+        self.inter_counter-=1
         
-
 
     def exitReturnStatement(self, ctx: CompiscriptParser.ReturnStatementContext):
         actual_ty = NULL
@@ -609,9 +642,7 @@ class AstAndSemantic(CompiscriptListener):
         sub = ctx.assignmentExpr()
         try:
             lhs = sub.leftHandSide()
-        
-            print("PASSED")
-            print(self.ast.get(lhs), self.ast.get(lhs) is Indexed)
+
             if(isinstance(self.ast.get(lhs), Indexed)):
                 indexed = self.ast.get(lhs)
                 rhs = sub.assignmentExpr()
@@ -629,7 +660,6 @@ class AstAndSemantic(CompiscriptListener):
                     self.types[ctx] = self.types.get(self.types[rhs], ERROR)
                 else:
                     self.errors.append(f"Tipo de asignacion incompatible: esperado {indexed.ty}, obtenido {self.types[rhs]}")
-                print("------")
                 return
             else:
                 rhs = sub.assignmentExpr()
@@ -643,7 +673,6 @@ class AstAndSemantic(CompiscriptListener):
                 )
                 self.ast[ctx] = node
                 self.types[ctx] = op_ty
-                print("------")
                 return
             
         except:
@@ -1108,7 +1137,19 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = ThisExpr(ty=ty)
         self.types[ctx] = ty
 
-
+    def exitContinueStatement(self, ctx):
+        if(self.inter_counter > 0):
+            self.ast[ctx] = ContinueStmt()
+        else:
+            self._error(ctx, msg="llamada a \'continue\' invalida fuera iterador")
+        return
+    
+    def exitBreakStatement(self, ctx):
+        if(self.inter_counter > 0):
+            self.ast[ctx] = BreakStmt()
+        else:
+            self._error(ctx, msg="llamada a \'break\' invalida fuera iterador")
+        return
     # def exitCallExpr(self, ctx: CompiscriptParser.CallExprContext):
     #     """
     #     En esta gramática, CallExpr es sólo el sufijo '(args)'.

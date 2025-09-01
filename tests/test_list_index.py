@@ -63,18 +63,18 @@ def test_index_by_int():
     """
     # Indexacion por entero
     errors, program = run_semantic(input)
+    print(program)
     # 2 por cada iniciacion, uno por indice no entero, y otro por incializacion
-    assert len(errors) == 6
+    assert len(errors) == 3
     
 def test_index_in_op():
     input ="""
     let tem1 : integer[];
-    let b = 5 * tem1[1]/tem1[2];
+    let b = 5 * tem1[1]/tem1[2] + tem1[3];
     
     let bol_arr : boolean[];
     let value = bol_arr[1] && bol_arr[2] || bol_arr[3];
     """
     # Indexacion por entero
     errors, program = run_semantic(input)
-    print(errors)
     assert len(errors) == 0

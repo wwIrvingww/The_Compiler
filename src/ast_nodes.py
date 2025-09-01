@@ -101,6 +101,7 @@ class BinaryOp(ASTNode):
 class PrintStmt(ASTNode):
     expr: 'ASTNode' = None  # type: ignore
 
+
 @dataclass
 class IfStmt(ASTNode):
     cond: 'ASTNode' = None  # type: ignore
@@ -112,6 +113,13 @@ class WhileStmt(ASTNode):
     cond: 'ASTNode' = None  # type: ignore
     body: Block = None  # type: ignore
 
+@dataclass
+class ForStmt(ASTNode):
+    # init: Optional['ASTNode'] = None
+    cond: 'ASTNode' = None
+    update: 'ASTNode' = None
+    body: Block= None
+    
 @dataclass
 class ReturnStmt(ASTNode):
     expr: Optional['ASTNode'] = None
@@ -186,6 +194,9 @@ def _label(n: ASTNode) -> str:
     if isinstance(n, PrintStmt):   return "PrintStmt"
     if isinstance(n, IfStmt):      return "IfStmt"
     if isinstance(n, WhileStmt):   return "WhileStmt"
+    
+    if isinstance(n, ForStmt):
+        return f"ForLoop "
     if isinstance(n, ReturnStmt):  return "ReturnStmt"
     if isinstance(n, FuncDecl):
         ps = ", ".join(f"{p}:{t}" for p, t in n.params)

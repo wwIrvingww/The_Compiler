@@ -27,7 +27,7 @@ def compatible(expected: Optional['Type'], actual: Type) -> bool:
         return True
     if is_list(expected) and actual == type_list(NULL):
         return True
-    return str(expected)==str(actual)
+    return expected == actual
 
 
 def returnLiteral(lex):
@@ -73,6 +73,11 @@ class AstAndSemantic(CompiscriptListener):
         self._class_frames: list = []
         self.func_ret_stack: List[Type] = [] #Agregar un stack para validar los returns
 
+    def _error(self, ctx, msg):
+        line = getattr(ctx.start, "line", 1)
+        self.errors.append(
+            f"[line {line}] {msg}"
+        )
     def _enter_scope(self):
         self.table.enter_scope()
         self.const_scopes.append(set())
@@ -113,13 +118,15 @@ class AstAndSemantic(CompiscriptListener):
             init_node = self.ast.get(ctx.initializer())
             init_ty = self.types.get(ctx.initializer(), ERROR)
         try:
-            
             self._define_symbol(name, declared or (init_ty if (init_ty != NULL) else None), err_ctx=ctx)
         except Exception as e:
             self.errors.append(str(e))
 
         if ctx.initializer() and not compatible(declared, init_ty):
-            self.errors.append(f"Tipo incompatible en inicializacion de '{name}': esperado {declared}, obtenido {init_ty}")
+            self._error(
+                msg=f"Tipo incompatible en inicializacion de '{name}': esperado {declared}, obtenido {init_ty}",
+                ctx=ctx
+            )
 
         node = VarDecl(name=name, is_const=False, declared_type=declared, init=init_node, ty=declared or init_ty or NULL)
         self.ast[ctx] = node
@@ -157,6 +164,7 @@ class AstAndSemantic(CompiscriptListener):
 
     def exitAssignment(self, ctx: CompiscriptParser.AssignmentContext):
         # RHS
+        
         exprs = ctx.expression()
         expr_list = exprs if isinstance(exprs, list) else [exprs]
         rhs_ctx = expr_list[-1]
@@ -206,36 +214,50 @@ class AstAndSemantic(CompiscriptListener):
 
         # Buscar en la tabla de símbolos
         sym = self.table.lookup(name)
-        
-        try:
-            if(sym.metadata["const"]):
-                self.errors.append(f"No se puede asignar a const \'{sym.name}\'")
+        try: 
+            if sym.metadata.get("const"):
+                self._error(
+                    msg=f"No se puede asignar a const \'{sym.name}\'",
+                    ctx=ctx
+                )
+                return
         except:
             pass
         
         if sym is None:
             # intentar sacar línea del token/ctx
-            line = 1
-            try:
-                # tokens ANTLR: ids.getSymbol().line
-                token = None
-                try:
-                    token = ids.getSymbol()
+            self._error(
+                msg=f"variable '{name}' no declarada",
+                ctx=ctx
+            )
+            return
+            # line = 1
+            # try:
+            #     # tokens ANTLR: ids.getSymbol().line
+            #     token = None
+            #     try:
+            #         token = ids.getSymbol()
+            #     except Exception:
                     
-                    
-                except Exception:
-                    # a veces ids es un Token (no un ctx) con .line
-                    token = getattr(ids, 'symbol', None) or getattr(ids, 'getSymbol', None)
-                if hasattr(token, 'line'):
-                    line = token.line
-                else:
-                    line = getattr(ctx.start, "line", 1)
-            except Exception:
-                line = getattr(ctx.start, "line", 1)
-
-            self.errors.append(f"[linea {line}] variable '{name}' no declarada")
-     
-
+            #         # a veces ids es un Token (no un ctx) con .line
+            #         token = getattr(ids, 'symbol', None) or getattr(ids, 'getSymbol', None)
+            #     if hasattr(token, 'line'):
+            #         line = token.line
+            #     else:
+            #         line = getattr(ctx.start, "line", 1)
+            # except Exception:
+        else:
+            identifier_node = Identifier(
+                ty = sym.type,
+                name = sym.name
+            )
+            ass_node = Assign(
+                dest = identifier_node,
+                value= val_node,
+                ty = sym.type  
+            )
+            self.ast[ctx] = ass_node
+            return
         # (Opcional) construir nodo AST/typing similar a antes
         # self.ast[ctx] = Assign(name=name, value=val_node, ty=(sym.type if sym else ERROR))
 
@@ -255,7 +277,10 @@ class AstAndSemantic(CompiscriptListener):
             init_ty = self.types.get(ctx.expression(), ERROR)
 
         if not ctx.expression():
-            self.errors.append(f"Constante '{name}' debe tener inicializador")
+            self._error(
+                msg=f"Constante \'{name}\' debe tener inicializador",
+                ctx=ctx
+            )
 
         try:
             sym = Symbol(name, declared or init_ty or NULL, metadata={"const": True})
@@ -343,17 +368,21 @@ class AstAndSemantic(CompiscriptListener):
         Exige que la condición del for sea booleana.
         Soporta for estilo C (init; cond; update) y variantes con una sola expresión entre paréntesis.
         """
+        print("Leaving for...")
         cond_ctx = None
+        update_ctx = None
         try:
             exprs = ctx.expression()
             if isinstance(exprs, list):
                 # Heurística:
                 # - Si hay 3 expresiones: (init; cond; update) -> cond es la segunda
-                # - Si hay 2 o 1 expresiones, tomamos la primera como condición (caso simple)
                 if len(exprs) >= 3:
                     cond_ctx = exprs[1]
+                    update_ctx = exprs[2]
+                # - Si hay 2 o 1 expresiones, tomamos la primera como condición (caso simple)
                 elif len(exprs) >= 1:
                     cond_ctx = exprs[0]
+                    update_ctx = exprs[1]
             else:
                 cond_ctx = exprs
         except Exception:
@@ -366,7 +395,7 @@ class AstAndSemantic(CompiscriptListener):
         cond_ty = self.types.get(cond_ctx, None)
 
         try:
-            is_bool = (cond_ty is BOOL)
+            is_bool = (cond_ty  == BOOL)
         except NameError:
             is_bool = False
 
@@ -374,6 +403,17 @@ class AstAndSemantic(CompiscriptListener):
             if cond_text not in ("true", "false"):
                 line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
                 self.errors.append(f"[linea {line}] condicion de 'for' no es boolean: '{cond_text}'")
+        
+        stmts = [self.ast.get(s) for s in ctx.block().statement()]
+        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        forNode = ForStmt(
+            ty=NULL,
+            cond=self.ast.get(cond_ctx),
+            update=self.ast.get(update_ctx),
+            body=block_node
+        )
+        self.ast[ctx] = forNode
+        
 
 
     def exitReturnStatement(self, ctx: CompiscriptParser.ReturnStatementContext):
@@ -505,7 +545,8 @@ class AstAndSemantic(CompiscriptListener):
             return
         op = ctx.getChild(1).getText()
         node, ty = self._bin2(ctx.unaryExpr(0), ctx.unaryExpr(1), op)
-        if (ty == ERROR):
+        compat = (node.right.ty == node.left.ty) and (node.right.ty == INT)
+        if (not compat):
             self.errors.append(f"No se puede aplicar {op} a tipos \'{node.left.ty}\' y \'{node.right.ty}\'")
         self.ast[ctx] = node; self.types[ctx] = ty
 
@@ -516,7 +557,8 @@ class AstAndSemantic(CompiscriptListener):
             return
         op = ctx.getChild(1).getText()
         node, ty = self._bin2(ctx.multiplicativeExpr(0), ctx.multiplicativeExpr(1), op)
-        if (ty == ERROR):
+        compat = (node.right.ty == node.left.ty) and ((node.right.ty == STR) or (node.right.ty == INT))
+        if (not compat):
             self.errors.append(f"No se puede aplicar {op} a tipos \'{node.left.ty}\' y \'{node.right.ty}\'")
         self.ast[ctx] = node; self.types[ctx] = ty
 
@@ -527,7 +569,8 @@ class AstAndSemantic(CompiscriptListener):
             return
         op = ctx.getChild(1).getText()
         node, ty = self._bin2(ctx.equalityExpr(0), ctx.equalityExpr(1), op)
-        if (ty == ERROR):
+        compat = (node.right.ty == node.left.ty) and (node.right.ty == BOOL)
+        if (not compat):
             self.errors.append(f"No se puede aplicar {op} a tipos \'{node.left.ty}\' y \'{node.right.ty}\'")
         self.ast[ctx] = node; self.types[ctx] = ty
 
@@ -538,7 +581,8 @@ class AstAndSemantic(CompiscriptListener):
             return
         op = ctx.getChild(1).getText()
         node, ty = self._bin2(ctx.logicalAndExpr(0), ctx.logicalAndExpr(1), "||")
-        if (ty == ERROR):
+        compat = (node.right.ty == node.left.ty) and (node.right.ty == BOOL)
+        if (not compat):
             self.errors.append(f"No se puede aplicar {op} a tipos \'{node.left.ty}\' y \'{node.right.ty}\'")
         self.ast[ctx] = node; self.types[ctx] = ty
 ######
@@ -562,33 +606,53 @@ class AstAndSemantic(CompiscriptListener):
         self.ast[ctx] = node; self.types[ctx] = ty
 
     def exitExpression(self, ctx: CompiscriptParser.ExpressionContext):
-        
         sub = ctx.assignmentExpr()
         try:
             lhs = sub.leftHandSide()
-            indexed = self.ast.get(lhs)
-            rhs = sub.assignmentExpr()
-            compat = compatible(indexed.ty, self.types[rhs] )
-            if compat:
-                node = Assign(
-                    ty =indexed.ty,
-                    dest = indexed.array,
-                    index = indexed.index,
-                    value = self.ast[rhs]
-                )
-                self.ast[ctx] = node
-                self.types[ctx] = self.types.get(self.types[rhs], ERROR)
+        
+            print("PASSED")
+            print(self.ast.get(lhs), self.ast.get(lhs) is Indexed)
+            if(isinstance(self.ast.get(lhs), Indexed)):
+                indexed = self.ast.get(lhs)
+                rhs = sub.assignmentExpr()
+                
+                compat = compatible(indexed.ty, self.types[rhs] )
+                
+                if compat:
+                    node = Assign(
+                        ty =indexed.ty,
+                        dest = indexed.array,
+                        index = indexed.index,
+                        value = self.ast[rhs]
+                    )
+                    self.ast[ctx] = node
+                    self.types[ctx] = self.types.get(self.types[rhs], ERROR)
+                else:
+                    self.errors.append(f"Tipo de asignacion incompatible: esperado {indexed.ty}, obtenido {self.types[rhs]}")
+                print("------")
                 return
             else:
-                self.errors.append(f"Tipo de asignacion incompatible: esperado {indexed.ty}, obtenido {self.types[rhs]}")
+                rhs = sub.assignmentExpr()
+                orig_node =  self.ast.get(lhs)
+                dest_node = self.ast.get(rhs)
+                op_ty = self.types.get(lhs, ERROR)
+                node = Assign(
+                    ty =  op_ty,
+                    dest =  self.ast.get(lhs),
+                    value = self.ast.get(rhs)
+                )
+                self.ast[ctx] = node
+                self.types[ctx] = op_ty
+                print("------")
                 return
+            
         except:
-            self.ast[ctx] = self.ast[sub]
-            self.types[ctx] = self.types.get(sub, ERROR)
-
-        if sub in self.ast:
-            self.ast[ctx] = self.ast[sub]
-            self.types[ctx] = self.types.get(sub, ERROR)
+            if sub in self.ast:
+                self.ast[ctx] = self.ast[sub]
+                self.types[ctx] = self.types.get(sub, ERROR)
+            else:
+                
+                return
 
     def exitPrimaryExpr(self, ctx: CompiscriptParser.PrimaryExprContext):
         # primaryExpr: literalExpr | leftHandSide | '(' expression ')'
@@ -754,11 +818,30 @@ class AstAndSemantic(CompiscriptListener):
 
             # --- Indexación: '[' expression ']' (aún no soportado) ---
             elif isinstance(sfx, CompiscriptParser.IndexExprContext):
-                self.errors.append("Indexación no soportada aun en esta fase.")
-                self.ast[ctx] = node
-                self.types[ctx] = ERROR
-                return
-
+                if (is_list(node.ty)):
+                    # Chequear que la indexacion sea por un tipo entero
+                    suf_exp = self.types[sfx.expression()]
+                    if(str(suf_exp) != 'integer'):
+                        self.errors.append(f"Indexacion debe ser tipo \'integer\' no {suf_exp}")
+                        return
+                    # print("\t Suf exp", suf_exp)
+                    # print("\t Base node", str(base_node.ty))
+                    
+                    ty = index(node.ty)
+                    tem_node = Indexed(
+                        name ="*"+str(node.name),
+                        array = node,
+                        index = self.ast[sfx.expression()],
+                        ty = ty
+                    )
+                    
+                    # print("\n")
+                    self.ast[ctx] = tem_node
+                    self.types[ctx] = ty
+                    node = tem_node
+                else:
+                    self.errors.append(f"Objeto de tipo \'{node.ty}\' no soporta indexacion")
+                    return
             else:
                 # Desconocido: fallback
                 self.ast[ctx] = node

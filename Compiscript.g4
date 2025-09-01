@@ -51,14 +51,14 @@ printStatement: 'print' '(' expression ')' ';';
 ifStatement: 'if' '(' expression ')' block ('else' block)?;
 whileStatement: 'while' '(' expression ')' block;
 doWhileStatement: 'do' block 'while' '(' expression ')' ';';
-forStatement: 'for' '(' (variableDeclaration | assignment | ';') expression? ';' expression? ')' block;
+
 foreachStatement: 'foreach' '(' Identifier 'in' expression ')' block;
 breakStatement: 'break' ';';
 continueStatement: 'continue' ';';
 returnStatement: 'return' expression? ';';
 
 tryCatchStatement: 'try' block 'catch' '(' Identifier ')' block;
-
+forStatement: 'for' '(' (variableDeclaration | assignment | ';') expression? ';' expression? ')' block;
 switchStatement: 'switch' '(' expression ')' '{' switchCase* defaultCase? '}';
 switchCase: 'case' expression ':' statement*;
 defaultCase: 'default' ':' statement*;

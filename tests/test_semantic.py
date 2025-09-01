@@ -89,7 +89,6 @@ def test_const_reassignment_forbidden():
     c = 2;
     """
     errors, _ = run_semantic(code)
-    print(errors)
     assert any("No se puede asignar a const" in e and "'c'" in e for e in errors), errors
 
 

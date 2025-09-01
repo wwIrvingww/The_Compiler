@@ -14,7 +14,6 @@ def parse(src: str):
 def test_return_fuera_de_funcion():
     tree = parse("return 5;")
     errors = FlowValidator.validate(tree)
-    print(errors)
     assert any("fuera de funcion" in e for e in errors)
 
 def test_return_dentro_de_funcion_ok():

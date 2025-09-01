@@ -1,7 +1,11 @@
-//let b : integer;
-//b = 2;
-//let a : integer[];
-//a[1] = 2 * 2;
+let tem : integer[][][];
 
-const a : integer = 1;
-a = 2;
+// Expected: int[][] received int
+tem[1] = 1; // Expected: int[][] received int
+
+// Expected int[] received int[][]
+tem[1][1] = [[1,2], [3,4]];
+
+// Expected int received int[]
+tem[1][3][4] = [1];
+

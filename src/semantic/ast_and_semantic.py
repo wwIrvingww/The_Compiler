@@ -81,6 +81,30 @@ class AstAndSemantic(CompiscriptListener):
         self.errors.append(
             f"[line {line}] {msg}"
         )
+    def _stmt_line(self, ctx):
+        try:
+            return getattr(ctx.start, "line", 1)
+        except Exception:
+            return 1
+
+    def _mark_dead_code_in_block(self, block_ctx):
+        # Recorremos los hijos statement() del bloque y usamos el AST ya resuelto
+        stmts_ctx = list(block_ctx.statement())
+        # Encuentra el primer return/break/continue
+        terminators = {"ReturnStmt", "BreakStmt", "ContinueStmt"}
+        dead = False
+        for i, sctx in enumerate(stmts_ctx):
+            node = self.ast.get(sctx)
+            if node is None:
+                continue
+            k = type(node).__name__
+            if dead:
+                # todo lo que viene después del primer terminador es inalcanzable
+                line = self._stmt_line(sctx)
+                self.errors.append(f"[linea {line}] codigo muerto: instruccion inalcanzable")
+                continue
+            if k in terminators:
+                dead = True
     def _enter_scope(self):
         self.table.enter_scope()
         self.const_scopes.append(set())
@@ -104,6 +128,8 @@ class AstAndSemantic(CompiscriptListener):
         stmts = [self.ast.get(s) for s in ctx.statement()]
         node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
         self.ast[ctx] = node
+        # detectar código muerto dentro del propio bloque
+        self._mark_dead_code_in_block(ctx)
         self._exit_scope()
 
     def exitVariableDeclaration(self, ctx: CompiscriptParser.VariableDeclarationContext):
@@ -342,6 +368,8 @@ class AstAndSemantic(CompiscriptListener):
         if (len(if_blocks) == 1):
             stmts = [self.ast.get(s) for s in if_blocks[0].statement()]
             then_block = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+            # dead code en then
+            self._mark_dead_code_in_block(if_blocks[0])
             # just then block
             pass
         elif (len(if_blocks) == 2):
@@ -349,6 +377,9 @@ class AstAndSemantic(CompiscriptListener):
             then_block = Block(statements=[s for s in stmts1 if s is not None], ty=NULL)
             stmts2 = [self.ast.get(s) for s in if_blocks[1].statement()]
             else_block = Block(statements=[s for s in stmts2 if s is not None], ty=NULL)
+            # dead code en then y else
+            self._mark_dead_code_in_block(if_blocks[0])
+            self._mark_dead_code_in_block(if_blocks[1])
             # then and else blocks
             pass
         else:
@@ -403,6 +434,8 @@ class AstAndSemantic(CompiscriptListener):
             
         stmts = [self.ast.get(s) for s in ctx.block().statement()]
         block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        # corre el detector de código muerto usando el contexto del bloque original
+        self._mark_dead_code_in_block(ctx.block())
         while_node = WhileStmt(
             ty=NULL,
             is_do_while=True,
@@ -447,6 +480,8 @@ class AstAndSemantic(CompiscriptListener):
                 
         stmts = [self.ast.get(s) for s in ctx.block().statement()]
         block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        # corre el detector de código muerto usando el contexto del bloque original
+        self._mark_dead_code_in_block(ctx.block())
         while_node = WhileStmt(
             ty=NULL,
             is_do_while=False,
@@ -500,6 +535,8 @@ class AstAndSemantic(CompiscriptListener):
         
         stmts = [self.ast.get(s) for s in ctx.block().statement()]
         block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        # corre el detector de código muerto usando el contexto del bloque original
+        self._mark_dead_code_in_block(ctx.block())
         forNode = ForStmt(
             ty=NULL,
             cond=self.ast.get(cond_ctx),
@@ -557,6 +594,8 @@ class AstAndSemantic(CompiscriptListener):
 
         stmts = [self.ast.get(s) for s in ctx.block().statement()]
         block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        # corre el detector de código muerto usando el contexto del bloque original
+        self._mark_dead_code_in_block(ctx.block())
         fore_node = ForEachStmt(
             ty=NULL,
             array=array_node,
@@ -661,7 +700,13 @@ class AstAndSemantic(CompiscriptListener):
             node = Identifier(name=name, ty=ERROR)
             ty = ERROR
         else:
-            ty = sym.type or NULL
+            # Si el símbolo es una función, tiparlo como 'func' (no como su tipo de retorno)
+            # para impedir uso aritmético/lógico directa del identificador.
+            meta = getattr(sym, "metadata", {}) or {}
+            if meta.get("kind") == "func":
+                ty = Type("func")
+            else:
+                ty = sym.type or NULL
             node = Identifier(name=name, ty=ty)
 
         # Mapea en la alternativa...

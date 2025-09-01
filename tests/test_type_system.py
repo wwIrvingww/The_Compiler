@@ -1,4 +1,4 @@
-# tests/test_semantic_tipos.py
+# tests/test_type_system.py
 
 import pytest
 from antlr4 import InputStream, CommonTokenStream, ParseTreeWalker
@@ -20,8 +20,7 @@ def run_semantic(code: str):
 
 
 # =============================================================================
-# Inciso 1 — Aritmética (+, -, *, /): operandos integer (tu listener admite int-int;
-# además permite string + string como concatenación). Probamos lo permitido y lo inválido.
+# Inciso 1 — Aritmética (+, -, *, /): operandos integer
 # =============================================================================
 
 def test_01_aritmetica_ok_enteros():
@@ -171,7 +170,7 @@ def test_05_const_error_sin_inicializador():
 
 # =============================================================================
 # Inciso 6 — Listas y estructuras: verificación de tipo de elementos e índices.
-# Tu listener:
+# listener:
 #  - En ArrayLiteral exige homogeneidad: "No se puede agrupar tipo 'X' con tipo 'Y'..."
 #  - Para indexación valida índice integer: "Indexacion debe ser tipo 'integer' no ..."
 #  - Para asignar a un elemento: "Tipo de asignacion incompatible: esperado T, obtenido U"

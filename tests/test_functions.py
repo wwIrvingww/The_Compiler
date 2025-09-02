@@ -254,3 +254,91 @@ def test_cx_llamar_funcion_no_declarada_negativa():
     code = "let x = foo(1);"
     errors, _ = run_semantic(code)
     assert any("Funcion no declarada: 'foo'" in e for e in errors), errors
+
+# ============================================================================
+# Falta de return en funciones con tipo de retorno (todas las rutas)
+# ============================================================================
+
+def test_missing_return_simple_negativa():
+    """
+    Negativo: la función declara integer pero no retorna en todas las rutas.
+    Debe reportar error (mensaje puede ser 'falta return' o 'Tipo de retorno incompatible ... null').
+    """
+    code = """
+    function fact(n: integer): integer {
+        if (n == 0) { return 1; }
+        // falta return aquí
+    }
+    """
+    errors, _ = run_semantic(code)
+    assert any(("falta 'return'" in e.lower()) or ("tipo de retorno incompatible" in e.lower()) for e in errors), errors
+
+def test_missing_return_if_sin_else_negativa():
+    """
+    Negativo: if sin else no garantiza return en todas las rutas.
+    """
+    code = """
+    function foo(x: integer): integer {
+        if (x > 0) { return 1; }
+        // sin else, falta return en la ruta contraria
+    }
+    """
+    errors, _ = run_semantic(code)
+    assert any(("falta 'return'" in e.lower()) or ("tipo de retorno incompatible" in e.lower()) for e in errors), errors
+
+def test_missing_return_en_switch_sin_default_negativa():
+    """
+    Negativo: switch sin default no garantiza return para todos los casos.
+    """
+    code = """
+    function pick(n: integer): integer {
+        switch (n) {
+            case 1: { return 10; }
+            // falta default que garantice retorno
+        }
+    }
+    """
+    errors, _ = run_semantic(code)
+    assert any(("falta 'return'" in e.lower()) or ("tipo de retorno incompatible" in e.lower()) for e in errors), errors
+
+def test_loop_no_garantiza_return_negativa():
+    """
+    Negativo: un while no garantiza retorno por sí mismo.
+    """
+    code = """
+    function g(n: integer): integer {
+        while (n > 0) {
+            n = n - 1;
+        }
+        // falta return al salir del while
+    }
+    """
+    errors, _ = run_semantic(code)
+    assert any(("falta 'return'" in e.lower()) or ("tipo de retorno incompatible" in e.lower()) for e in errors), errors
+
+def test_todas_las_rutas_retornan_positiva():
+    """
+    Positivo: if con else, ambas ramas retornan; la función es válida.
+    """
+    code = """
+    function h(n: integer): integer {
+        if (n > 0) { return 1; } else { return 0; }
+    }
+    """
+    errors, _ = run_semantic(code)
+    assert errors == [], errors
+
+def test_switch_con_default_todos_retornan_positiva():
+    """
+    Positivo: switch con default y todos los bloques retornan.
+    """
+    code = """
+    function pick2(n: integer): integer {
+        switch (n) {
+            case 1: { return 10; }
+            default: { return 0; }
+        }
+    }
+    """
+    errors, _ = run_semantic(code)
+    assert errors == [], errors

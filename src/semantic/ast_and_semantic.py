@@ -131,6 +131,42 @@ class AstAndSemantic(CompiscriptListener):
                 continue
             if k in terminators:
                 dead = True
+    # --- helpers de garantía de return ---
+    def _block_guarantees_return(self, block: Block) -> bool:
+        if not isinstance(block, Block) or not block.statements:
+            return False
+        # Si alguna sentencia en el bloque garantiza return, el bloque garantiza return.
+        # (Las anteriores pueden o no retornar, pero si retornan, mejor; si no, alcanzan ésta).
+        for st in block.statements:
+            if self._stmt_guarantees_return(st):
+                return True
+        return False
+
+    def _stmt_guarantees_return(self, node: ASTNode) -> bool:
+        from ast_nodes import ReturnStmt, Block, IfStmt, SwitchStatement, DefaultCase, SwitchCase, WhileStmt, ForStmt, ForEachStmt
+        if isinstance(node, ReturnStmt):
+            return True
+        if isinstance(node, Block):
+            return self._block_guarantees_return(node)
+        if isinstance(node, IfStmt):
+            # Requiere both-branches
+            if node.then_block is None or node.else_block is None:
+                return False
+            return self._block_guarantees_return(node.then_block) and self._block_guarantees_return(node.else_block)
+        if isinstance(node, SwitchStatement):
+            # Conservador: requiere default y que TODOS los cases y el default garanticen return
+            if node.default is None:
+                return False
+            def _case_block_guarantees(c):
+                return isinstance(c, SwitchCase) and self._block_guarantees_return(c.case_block)
+            all_cases = all(_case_block_guarantees(c) for c in (node.cases or []))
+            default_ok = isinstance(node.default, DefaultCase) and self._block_guarantees_return(node.default.default_block)
+            return all_cases and default_ok
+        if isinstance(node, (WhileStmt, ForStmt, ForEachStmt)):
+            # Un bucle podría no ejecutarse; no garantiza por sí mismo.
+            return False
+        # Otros nodos: por defecto, no garantizan
+        return False
     def _enter_scope(self):
         self.table.enter_scope()
         self.const_scopes.append(set())
@@ -1349,7 +1385,12 @@ class AstAndSemantic(CompiscriptListener):
 
         node = FuncDecl(name=name, params=params, ret=ret, body=body, ty=ret)
         self.ast[ctx] = node
-
+        # Verificación de "todas las rutas retornan" para funciones con ret != NULL
+        if ret != NULL:
+            body_block = body
+            if not self._block_guarantees_return(body_block):
+                line = getattr(ctx.start, "line", 1)
+                self.errors.append(f"[linea {line}] falta 'return' en funcion '{name}' de tipo {ret}")
         self.current_method = None
 
         self.func_ret_stack.pop()

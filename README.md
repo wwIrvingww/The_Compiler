@@ -57,4 +57,7 @@ Para ya correr el parser completo, pueden usar tambien este sh, que agarra el ar
 scripts/run_parser.sh
 ```
 ### Sistema de tipos
+TBD
 
+## 4. Documentación
+[Documentación](Documentacion.pdf)

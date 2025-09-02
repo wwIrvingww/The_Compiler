@@ -73,12 +73,38 @@ class AstAndSemantic(CompiscriptListener):
         self._class_frames: list = []
         self.func_ret_stack: List[Type] = [] #Agregar un stack para validar los returns
         self.inter_counter : int = 0
+        self.init_foreach_identifyer_flag : bool  = False
+        self.foreach_item_stack : List[str] = []
 
     def _error(self, ctx, msg):
         line = getattr(ctx.start, "line", 1)
         self.errors.append(
             f"[line {line}] {msg}"
         )
+    def _stmt_line(self, ctx):
+        try:
+            return getattr(ctx.start, "line", 1)
+        except Exception:
+            return 1
+
+    def _mark_dead_code_in_block(self, block_ctx):
+        # Recorremos los hijos statement() del bloque y usamos el AST ya resuelto
+        stmts_ctx = list(block_ctx.statement())
+        # Encuentra el primer return/break/continue
+        terminators = {"ReturnStmt", "BreakStmt", "ContinueStmt"}
+        dead = False
+        for i, sctx in enumerate(stmts_ctx):
+            node = self.ast.get(sctx)
+            if node is None:
+                continue
+            k = type(node).__name__
+            if dead:
+                # todo lo que viene después del primer terminador es inalcanzable
+                line = self._stmt_line(sctx)
+                self.errors.append(f"[linea {line}] codigo muerto: instruccion inalcanzable")
+                continue
+            if k in terminators:
+                dead = True
     def _enter_scope(self):
         self.table.enter_scope()
         self.const_scopes.append(set())
@@ -102,6 +128,8 @@ class AstAndSemantic(CompiscriptListener):
         stmts = [self.ast.get(s) for s in ctx.statement()]
         node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
         self.ast[ctx] = node
+        # detectar código muerto dentro del propio bloque
+        self._mark_dead_code_in_block(ctx)
         self._exit_scope()
 
     def exitVariableDeclaration(self, ctx: CompiscriptParser.VariableDeclarationContext):
@@ -309,8 +337,11 @@ class AstAndSemantic(CompiscriptListener):
         expr_node = self.ast.get(ctx.expression())
         self.ast[ctx] = PrintStmt(expr=expr_node, ty=NULL)
 
-    def exitIfStatement(self, ctx: CompiscriptParser.IfStatementContext):
+    # ---------------------------------- #
+    #       Comparison Statements        #
+    # -----------------------------------#
 
+    def exitIfStatement(self, ctx: CompiscriptParser.IfStatementContext):
         # localizar la condición
         cond_ctx = None
         try:
@@ -324,14 +355,14 @@ class AstAndSemantic(CompiscriptListener):
 
         cond_text = cond_ctx.getText()
         cond_ty = self.types.get(cond_ctx, None)
+        
         try:
             is_bool = (cond_ty == BOOL)
         except NameError:
             is_bool = False
 
         if not is_bool and cond_text not in ("true", "false"):
-            line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
-            self.errors.append(f"[linea {line}] condicion de 'if' debe ser boolean: '{cond_text}'")
+            self._error(ctx, msg=f"condicion de 'if' debe ser boolean, no \'{cond_ty}\': '{cond_text}'")
             return
         
         if_blocks = [b for b in ctx.block()]
@@ -341,6 +372,8 @@ class AstAndSemantic(CompiscriptListener):
         if (len(if_blocks) == 1):
             stmts = [self.ast.get(s) for s in if_blocks[0].statement()]
             then_block = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+            # dead code en then
+            self._mark_dead_code_in_block(if_blocks[0])
             # just then block
             pass
         elif (len(if_blocks) == 2):
@@ -348,6 +381,9 @@ class AstAndSemantic(CompiscriptListener):
             then_block = Block(statements=[s for s in stmts1 if s is not None], ty=NULL)
             stmts2 = [self.ast.get(s) for s in if_blocks[1].statement()]
             else_block = Block(statements=[s for s in stmts2 if s is not None], ty=NULL)
+            # dead code en then y else
+            self._mark_dead_code_in_block(if_blocks[0])
+            self._mark_dead_code_in_block(if_blocks[1])
             # then and else blocks
             pass
         else:
@@ -356,10 +392,122 @@ class AstAndSemantic(CompiscriptListener):
         node = IfStmt(
             ty=NULL,
             cond = self.ast.get(cond_ctx),
-            then_block=then_block,
+            then_block= then_block,
             else_block= else_block if else_block else None
         )
         self.ast[ctx] = node
+        
+    def exitSwitchStatement(self, ctx):
+
+        # Fetch variable of the switch
+        switch_exp_ctx = ctx.expression()
+        switch_node = self.ast.get(switch_exp_ctx)
+        switch_ty = switch_node.ty
+        
+        cases_nodes = []
+        case_values = []
+        # For the cases
+        if ctx.switchCase():
+            cases_ctx = ctx.switchCase()
+            for c in cases_ctx:
+                case_exp = self.ast.get(c.expression())
+                if (case_exp.ty != switch_ty):
+                    self._error(
+                        ctx,
+                        msg=f"\'case\' debe tener el mismo tipo que la expresion. Se esperaba \'{switch_ty}\' y se obtuvo \'{case_exp.ty}\'"
+                    )
+                case_values.append(case_exp.value)
+                stmts = [self.ast.get(s) for s in c.statement()]
+                case_block = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+                cases_nodes.append(
+                    SwitchCase(
+                        ty=case_exp.ty,
+                        literal= case_exp,
+                        case_block=case_block
+                    )
+                )
+        else:
+            if not ctx.defaultCase():
+                self._error(
+                    ctx,
+                    msg="sentencia \'switch\' debe tener al menos un caso"
+                )
+        # Casos repetidos
+        if len(case_values) != len(set(case_values)):
+            self._error(
+                ctx=ctx,
+                msg="caso repetido en sentencia \'switch\'"
+            )
+        
+        # Default case (opcional)
+        default_node = None
+        if ctx.defaultCase():
+            stmts = [self.ast.get(s) for s in ctx.defaultCase().statement()]
+            default_node = DefaultCase(
+                ty=switch_ty,
+                default_block=Block(statements=[s for s in stmts if s is not None], ty=NULL)   
+            )
+            
+        
+        complete_node = SwitchStatement(
+            ty=switch_node.ty,
+            variable=switch_node,
+            cases=cases_nodes,
+            default=default_node
+        )
+
+        self.ast[ctx] = complete_node
+        self.types[ctx] = switch_node.ty
+        
+    # ---------------------------------- #
+    #       Iterative Statements         #
+    # -----------------------------------#
+    
+    def enterDoWhileStatement(self, ctx):
+        self.inter_counter+=1;
+    def exitDoWhileStatement(self, ctx: CompiscriptParser.DoWhileStatementContext):
+        """
+        Exige que la condición del while sea booleana.
+        Intenta primero con inferencia de tipos; si no hay tipo, cae a literal 'true'/'false'.
+        """
+        cond_ctx = None
+        try:
+            # muchas gramáticas exponen la condición como expression()
+            exprs = ctx.expression()
+            cond_ctx = exprs if not isinstance(exprs, list) else (exprs[0] if exprs else None)
+        except Exception:
+            cond_ctx = None
+
+        if cond_ctx is None:
+            return  # si la gramática no ofrece la condición aquí, no generamos error
+
+        cond_text = cond_ctx.getText()
+        cond_ty = self.types.get(cond_ctx, None)
+
+        # Si tenemos sistema de tipos y BOOL está definido:
+        try:
+            is_bool = (cond_ty == BOOL)
+        except NameError:
+            is_bool = False
+
+        # Fallback literal
+        if not is_bool:
+            if cond_text not in ("true", "false"):
+                line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
+                self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
+            
+        stmts = [self.ast.get(s) for s in ctx.block().statement()]
+        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        # corre el detector de código muerto usando el contexto del bloque original
+        self._mark_dead_code_in_block(ctx.block())
+        while_node = WhileStmt(
+            ty=NULL,
+            is_do_while=True,
+            cond = self.ast.get(cond_ctx),
+            body=block_node
+        )
+        self.ast[ctx] = while_node
+        self.inter_counter-=1
         
     def enterWhileStatement(self, ctx):
         self.inter_counter+=1;
@@ -393,6 +541,18 @@ class AstAndSemantic(CompiscriptListener):
             if cond_text not in ("true", "false"):
                 line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
                 self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
+                
+        stmts = [self.ast.get(s) for s in ctx.block().statement()]
+        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        # corre el detector de código muerto usando el contexto del bloque original
+        self._mark_dead_code_in_block(ctx.block())
+        while_node = WhileStmt(
+            ty=NULL,
+            is_do_while=False,
+            cond = self.ast.get(cond_ctx),
+            body=block_node
+        )
+        self.ast[ctx] = while_node
         self.inter_counter-=1
 
     def enterForStatement(self, ctx):
@@ -439,6 +599,8 @@ class AstAndSemantic(CompiscriptListener):
         
         stmts = [self.ast.get(s) for s in ctx.block().statement()]
         block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        # corre el detector de código muerto usando el contexto del bloque original
+        self._mark_dead_code_in_block(ctx.block())
         forNode = ForStmt(
             ty=NULL,
             cond=self.ast.get(cond_ctx),
@@ -447,8 +609,71 @@ class AstAndSemantic(CompiscriptListener):
         )
         self.ast[ctx] = forNode
         self.inter_counter-=1
+    
+    def enterForeachStatement(self, ctx):
+        self.init_foreach_identifyer_flag = True
         
+        ## Array preparation
+        arr_ctx = ctx.expression()
+        arr_sym = self.table.lookup(arr_ctx.getText())
+        
+        if (not arr_sym):
+            self._error(ctx, f"no se pudo determinar la lista {ctx.expression().getText()}")
+            return
+    
+        arr_type = arr_sym.type
+        
+        if not is_list(arr_type):
+            self._error(ctx, f"condicion \'foreach\' espera tipo lista, se obtuvo {array_node.ty}")
+            return
+    
+        # Item preparation
+        item_name = ctx.Identifier().getText()
+        item_ty = index(arr_type)
+        self._define_symbol(
+            name_or_symbol=str(item_name),
+            ty = item_ty,
+            err_ctx=ctx.Identifier()
+        )
+        self.inter_counter+=1;
+        
+    def exitForeachStatement(self, ctx: CompiscriptParser.ForeachStatementContext):
+        """
+        Exige que la condición del for sea booleana.
+        Soporta for estilo Python (<item> in <array>)
+        """
+        # Array iterator:
+        array_ctx = ctx.expression()
+        array_node = self.ast.get(array_ctx)
+        # item iterator 
+               
+        item_name = ctx.Identifier().getText()
+        item_ty = index(array_node.ty)
 
+        item_node = VarDecl(
+            ty=item_ty,
+            declared_type=item_ty,
+            name=item_name
+        )
+
+        stmts = [self.ast.get(s) for s in ctx.block().statement()]
+        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+        # corre el detector de código muerto usando el contexto del bloque original
+        self._mark_dead_code_in_block(ctx.block())
+        fore_node = ForEachStmt(
+            ty=NULL,
+            array=array_node,
+            item = item_node,
+            body=block_node
+        )
+
+        self.ast[ctx] = fore_node
+        self.inter_counter-=1
+        return
+    # ---------------------------------- #
+    #          Other Statements          #
+    # -----------------------------------#
+    
     def exitReturnStatement(self, ctx: CompiscriptParser.ReturnStatementContext):
         actual_ty = NULL
         rn = None
@@ -532,11 +757,20 @@ class AstAndSemantic(CompiscriptListener):
         name = ctx.Identifier().getText()
         sym = self.table.lookup(name)
         if sym is None:
+            if self.init_foreach_identifyer_flag:
+                self.foreach_item_stack.append(name)
+                return
             self.errors.append(f"Identificador no declarado: '{name}'")
             node = Identifier(name=name, ty=ERROR)
             ty = ERROR
         else:
-            ty = sym.type or NULL
+            # Si el símbolo es una función, tiparlo como 'func' (no como su tipo de retorno)
+            # para impedir uso aritmético/lógico directa del identificador.
+            meta = getattr(sym, "metadata", {}) or {}
+            if meta.get("kind") == "func":
+                ty = Type("func")
+            else:
+                ty = sym.type or NULL
             node = Identifier(name=name, ty=ty)
 
         # Mapea en la alternativa...

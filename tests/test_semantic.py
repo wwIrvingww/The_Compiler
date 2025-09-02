@@ -148,3 +148,4 @@ def test_continue_dentro_fuera():
     assert errors[0] == "[line 4] llamada a 'break' invalida fuera iterador"
     assert errors[1] == "[line 6] llamada a 'continue' invalida fuera iterador"
     print(errors)
+

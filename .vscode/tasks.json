@@ -9,6 +9,13 @@
         "cwd": "${workspaceFolder}/client"
       },
       "problemMatcher": []
+    },
+    {
+      "label": "npm-build-client",
+      "type": "npm",
+      "script": "build",
+      "path": "client",
+      "problemMatcher": "$tsc"
     }
   ]
 }

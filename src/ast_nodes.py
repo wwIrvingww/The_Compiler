@@ -122,6 +122,7 @@ class IfStmt(ASTNode):
 
 @dataclass
 class WhileStmt(ASTNode):
+    is_do_while : bool = False
     cond: 'ASTNode' = None  # type: ignore
     body: Block = None  # type: ignore
 
@@ -131,10 +132,32 @@ class ForStmt(ASTNode):
     cond: 'ASTNode' = None
     update: 'ASTNode' = None
     body: Block= None
-    
+
+@dataclass
+class ForEachStmt(ASTNode):
+    array: 'ASTNode' = None
+    item: 'ASTNode' = None
+    body: Block = None    
+
 @dataclass
 class ReturnStmt(ASTNode):
     expr: Optional['ASTNode'] = None
+    
+    
+@dataclass
+class SwitchCase(ASTNode):
+    literal : ASTNode = None
+    case_block : Block = None
+@dataclass
+class DefaultCase(ASTNode):
+    default_block : Block = None
+
+@dataclass
+class SwitchStatement(ASTNode):
+    variable : 'ASTNode' = None
+    cases : List['ASTNode']  = field(default_factory=list)
+    default : Optional['DefaultCase'] = None
+    
 
 def _iter_children(n: Any) -> Iterable[ASTNode]:
     if not is_dataclass(n): return
@@ -205,7 +228,10 @@ def _label(n: ASTNode) -> str:
 
     if isinstance(n, PrintStmt):   return "PrintStmt"
     if isinstance(n, IfStmt):      return "IfStmt"
-    if isinstance(n, WhileStmt):   return "WhileStmt"
+    if isinstance(n, WhileStmt):   
+        if (n.is_do_while):
+            return "DoWhileStmt"
+        return "WhileStmt"
     
     if isinstance(n, ForStmt):
         return f"ForLoop "

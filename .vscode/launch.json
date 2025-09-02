@@ -12,7 +12,7 @@
       "outFiles": [
         "${workspaceFolder}/client/dist/**/*.js"
       ],
-      "preLaunchTask": "npm: build-client"
+      "preLaunchTask": "npm-build-client"
     },
     {
       "name": "Python: Run pytest current file",

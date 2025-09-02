@@ -35,6 +35,7 @@ RUN pip install ipython black mypy pylint pytest
 
 # Install graphviz for AST visualization image
 RUN pip install graphviz
+RUN pip install pygls
 
 # Set working directory
 WORKDIR /app

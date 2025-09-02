@@ -81,6 +81,32 @@ class AstAndSemantic(CompiscriptListener):
         self.errors.append(
             f"[line {line}] {msg}"
         )
+
+    def _tok_line(self, token_or_ctx, fallback_ctx=None):
+        """
+        Devuelve linea (1-based) del token si es posible; si no, del ctx; si no, 1.
+        Sirve para 'break'/'continue' y similares.
+        """
+        # token con getSymbol().line
+        try:
+            sym = token_or_ctx.getSymbol()  # Token
+            return getattr(sym, "line", 1)
+        except Exception:
+            pass
+        # ctx con .start.line
+        try:
+            return getattr(token_or_ctx.start, "line", 1)
+        except Exception:
+            pass
+        # fallback al ctx padre
+        if fallback_ctx is not None:
+            try:
+                return getattr(fallback_ctx.start, "line", 1)
+            except Exception:
+                pass
+        return 1
+
+
     def _stmt_line(self, ctx):
         try:
             return getattr(ctx.start, "line", 1)
@@ -462,154 +488,190 @@ class AstAndSemantic(CompiscriptListener):
     # ---------------------------------- #
     #       Iterative Statements         #
     # -----------------------------------#
+
+    # --- helper nueva: coloca esto dentro de la clase AstAndSemantic ---
+
+    def _is_inside_loop(self, ctx) -> bool:
+        """
+        Recorre la cadena de padres (parentCtx) para verificar si estamos
+        dentro de un bucle (while/for/do-while/foreach), independientemente
+        de contadores.
+        """
+        p = getattr(ctx, "parentCtx", None)
+        while p is not None:
+            if isinstance(p, (
+                CompiscriptParser.WhileStatementContext,
+                CompiscriptParser.ForStatementContext,
+                CompiscriptParser.DoWhileStatementContext,
+                CompiscriptParser.ForeachStatementContext,
+            )):
+                return True
+            p = getattr(p, "parentCtx", None)
+        return False
+
     
     def enterDoWhileStatement(self, ctx):
-        self.inter_counter+=1;
+        # Entramos a un bucle do-while
+        self.inter_counter += 1
+
     def exitDoWhileStatement(self, ctx: CompiscriptParser.DoWhileStatementContext):
         """
-        Exige que la condición del while sea booleana.
-        Intenta primero con inferencia de tipos; si no hay tipo, cae a literal 'true'/'false'.
+        Exige que la condición del do-while sea booleana.
         """
-        cond_ctx = None
         try:
-            # muchas gramáticas exponen la condición como expression()
-            exprs = ctx.expression()
-            cond_ctx = exprs if not isinstance(exprs, list) else (exprs[0] if exprs else None)
-        except Exception:
             cond_ctx = None
+            try:
+                exprs = ctx.expression()
+                cond_ctx = exprs if not isinstance(exprs, list) else (exprs[0] if exprs else None)
+            except Exception:
+                cond_ctx = None
 
-        if cond_ctx is None:
-            return  # si la gramática no ofrece la condición aquí, no generamos error
+            if cond_ctx is not None:
+                cond_text = cond_ctx.getText()
+                cond_ty = self.types.get(cond_ctx, None)
 
-        cond_text = cond_ctx.getText()
-        cond_ty = self.types.get(cond_ctx, None)
+                try:
+                    is_bool = (cond_ty == BOOL)
+                except NameError:
+                    is_bool = False
 
-        # Si tenemos sistema de tipos y BOOL está definido:
-        try:
-            is_bool = (cond_ty == BOOL)
-        except NameError:
-            is_bool = False
+                if not is_bool and cond_text not in ("true", "false"):
+                    line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
+                    self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
 
-        # Fallback literal
-        if not is_bool:
-            if cond_text not in ("true", "false"):
-                line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
-                self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
-            
-        stmts = [self.ast.get(s) for s in ctx.block().statement()]
-        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
-        # corre el detector de código muerto usando el contexto del bloque original
-        self._mark_dead_code_in_block(ctx.block())
-        while_node = WhileStmt(
-            ty=NULL,
-            is_do_while=True,
-            cond = self.ast.get(cond_ctx),
-            body=block_node
-        )
-        self.ast[ctx] = while_node
-        self.inter_counter-=1
+            try:
+                stmts = [self.ast.get(s) for s in ctx.block().statement()]
+                block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+                self._mark_dead_code_in_block(ctx.block())
+            except Exception:
+                block_node = None
+
+            if block_node is not None:
+                while_node = WhileStmt(
+                    ty=NULL,
+                    is_do_while=True,
+                    cond=self.ast.get(cond_ctx) if cond_ctx is not None else None,
+                    body=block_node
+                )
+                self.ast[ctx] = while_node
+        finally:
+            if self.inter_counter > 0:
+                self.inter_counter -= 1
+
         
     def enterWhileStatement(self, ctx):
-        self.inter_counter+=1;
+        # Entramos a un bucle while: habilita break/continue
+        self.inter_counter += 1
+
     def exitWhileStatement(self, ctx: CompiscriptParser.WhileStatementContext):
         """
         Exige que la condición del while sea booleana.
         Intenta primero con inferencia de tipos; si no hay tipo, cae a literal 'true'/'false'.
         """
-        cond_ctx = None
         try:
-            # muchas gramáticas exponen la condición como expression()
-            exprs = ctx.expression()
-            cond_ctx = exprs if not isinstance(exprs, list) else (exprs[0] if exprs else None)
-        except Exception:
+            # 1) localizar la condición
             cond_ctx = None
+            try:
+                exprs = ctx.expression()
+                cond_ctx = exprs if not isinstance(exprs, list) else (exprs[0] if exprs else None)
+            except Exception:
+                cond_ctx = None
 
-        if cond_ctx is None:
-            return  # si la gramática no ofrece la condición aquí, no generamos error
+            # 2) validar condición (si existe)
+            if cond_ctx is not None:
+                cond_text = cond_ctx.getText()
+                cond_ty = self.types.get(cond_ctx, None)
 
-        cond_text = cond_ctx.getText()
-        cond_ty = self.types.get(cond_ctx, None)
+                try:
+                    is_bool = (cond_ty == BOOL)
+                except NameError:
+                    is_bool = False
 
-        # Si tenemos sistema de tipos y BOOL está definido:
-        try:
-            is_bool = (cond_ty == BOOL)
-        except NameError:
-            is_bool = False
+                if not is_bool and cond_text not in ("true", "false"):
+                    line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
+                    self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
 
-        # Fallback literal
-        if not is_bool:
-            if cond_text not in ("true", "false"):
-                line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
-                self.errors.append(f"[linea {line}] condicion de 'while' debe ser boolean: '{cond_text}'")
-                
-        stmts = [self.ast.get(s) for s in ctx.block().statement()]
-        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
-        # corre el detector de código muerto usando el contexto del bloque original
-        self._mark_dead_code_in_block(ctx.block())
-        while_node = WhileStmt(
-            ty=NULL,
-            is_do_while=False,
-            cond = self.ast.get(cond_ctx),
-            body=block_node
-        )
-        self.ast[ctx] = while_node
-        self.inter_counter-=1
+            # 3) construir cuerpo y nodo (siempre que haya bloque)
+            try:
+                stmts = [self.ast.get(s) for s in ctx.block().statement()]
+                block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+                self._mark_dead_code_in_block(ctx.block())
+            except Exception:
+                block_node = None
+
+            if block_node is not None:
+                while_node = WhileStmt(
+                    ty=NULL,
+                    is_do_while=False,
+                    cond=self.ast.get(cond_ctx) if cond_ctx is not None else None,
+                    body=block_node
+                )
+                self.ast[ctx] = while_node
+        finally:
+            if self.inter_counter > 0:
+                self.inter_counter -= 1
+
 
     def enterForStatement(self, ctx):
-        self.inter_counter+=1;
+        # Entramos a un bucle for
+        self.inter_counter += 1
+
     def exitForStatement(self, ctx: CompiscriptParser.ForStatementContext):
         """
         Exige que la condición del for sea booleana.
         Soporta for estilo C (init; cond; update) y variantes con una sola expresión entre paréntesis.
         """
-        cond_ctx = None
-        update_ctx = None
         try:
-            exprs = ctx.expression()
-            if isinstance(exprs, list):
-                # Heurística:
-                # - Si hay 3 expresiones: (init; cond; update) -> cond es la segunda
-                if len(exprs) >= 3:
-                    cond_ctx = exprs[1]
-                    update_ctx = exprs[2]
-                # - Si hay 2 o 1 expresiones, tomamos la primera como condición (caso simple)
-                elif len(exprs) >= 1:
-                    cond_ctx = exprs[0]
-                    update_ctx = exprs[1]
-            else:
-                cond_ctx = exprs
-        except Exception:
             cond_ctx = None
+            update_ctx = None
+            try:
+                exprs = ctx.expression()
+                if isinstance(exprs, list):
+                    if len(exprs) >= 3:
+                        cond_ctx = exprs[1]
+                        update_ctx = exprs[2]
+                    elif len(exprs) >= 1:
+                        cond_ctx = exprs[0]
+                        update_ctx = exprs[1] if len(exprs) >= 2 else None
+                else:
+                    cond_ctx = exprs
+            except Exception:
+                cond_ctx = None
+                update_ctx = None
 
-        if cond_ctx is None:
-            return
+            if cond_ctx is not None:
+                cond_text = cond_ctx.getText()
+                cond_ty = self.types.get(cond_ctx, None)
 
-        cond_text = cond_ctx.getText()
-        cond_ty = self.types.get(cond_ctx, None)
+                try:
+                    is_bool = (cond_ty == BOOL)
+                except NameError:
+                    is_bool = False
 
-        try:
-            is_bool = (cond_ty  == BOOL)
-        except NameError:
-            is_bool = False
+                if not is_bool and cond_text not in ("true", "false"):
+                    line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
+                    self.errors.append(f"[linea {line}] condicion de 'for' no es boolean: '{cond_text}'")
 
-        if not is_bool:
-            if cond_text not in ("true", "false"):
-                line = getattr(cond_ctx.start, "line", getattr(ctx.start, "line", 1))
-                self.errors.append(f"[linea {line}] condicion de 'for' no es boolean: '{cond_text}'")
+            try:
+                stmts = [self.ast.get(s) for s in ctx.block().statement()]
+                block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
+                self._mark_dead_code_in_block(ctx.block())
+            except Exception:
+                block_node = None
+
+            if block_node is not None:
+                for_node = ForStmt(
+                    ty=NULL,
+                    cond=self.ast.get(cond_ctx) if cond_ctx is not None else None,
+                    update=self.ast.get(update_ctx) if update_ctx is not None else None,
+                    body=block_node
+                )
+                self.ast[ctx] = for_node
+        finally:
+            if self.inter_counter > 0:
+                self.inter_counter -= 1
+
         
-        stmts = [self.ast.get(s) for s in ctx.block().statement()]
-        block_node = Block(statements=[s for s in stmts if s is not None], ty=NULL)
-        # corre el detector de código muerto usando el contexto del bloque original
-        self._mark_dead_code_in_block(ctx.block())
-        forNode = ForStmt(
-            ty=NULL,
-            cond=self.ast.get(cond_ctx),
-            update=self.ast.get(update_ctx),
-            body=block_node
-        )
-        self.ast[ctx] = forNode
-        self.inter_counter-=1
-    
     def enterForeachStatement(self, ctx):
         self.init_foreach_identifyer_flag = True
         
@@ -1372,18 +1434,26 @@ class AstAndSemantic(CompiscriptListener):
         self.types[ctx] = ty
 
     def exitContinueStatement(self, ctx):
-        if(self.inter_counter > 0):
+        if self._is_inside_loop(ctx):
             self.ast[ctx] = ContinueStmt()
         else:
-            self._error(ctx, msg="llamada a \'continue\' invalida fuera iterador")
+            tok = getattr(ctx, "CONTINUE", None)
+            line = self._tok_line(tok() if callable(tok) else ctx, ctx)
+            # nota: el test espera "[line ...]" (en inglés)
+            self.errors.append(f"[line {line}] llamada a 'continue' invalida fuera iterador")
         return
-    
+
     def exitBreakStatement(self, ctx):
-        if(self.inter_counter > 0):
+        if self._is_inside_loop(ctx):
             self.ast[ctx] = BreakStmt()
         else:
-            self._error(ctx, msg="llamada a \'break\' invalida fuera iterador")
+            tok = getattr(ctx, "BREAK", None)
+            line = self._tok_line(tok() if callable(tok) else ctx, ctx)
+            # nota: el test espera "[line ...]" (en inglés)
+            self.errors.append(f"[line {line}] llamada a 'break' invalida fuera iterador")
         return
+
+
     # def exitCallExpr(self, ctx: CompiscriptParser.CallExprContext):
     #     """
     #     En esta gramática, CallExpr es sólo el sufijo '(args)'.

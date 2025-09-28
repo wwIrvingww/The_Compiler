@@ -4,6 +4,7 @@ from parser.CompiscriptListener import CompiscriptListener
 from typing import Optional, List, Dict, Any
 from symbol_table.symbol_table import Symbol, SymbolTable
 from ast_nodes import *
+from symbol_table.runtime_layout import FrameManager
 
 def unify_bin(op: str, lt: Type, rt: Type) -> Type:
     if op in {"+", "-", "*", "/", "%"}:
@@ -75,6 +76,8 @@ class AstAndSemantic(CompiscriptListener):
         self.inter_counter : int = 0
         self.init_foreach_identifyer_flag : bool  = False
         self.foreach_item_stack : List[str] = []
+        self.frame_manager = FrameManager()
+        self.frame_manager.enter_frame("global")
 
     def _error(self, ctx, msg):
         line = getattr(ctx.start, "line", 1)
@@ -212,6 +215,23 @@ class AstAndSemantic(CompiscriptListener):
             self._define_symbol(name, declared or (init_ty if (init_ty != NULL) else None), err_ctx=ctx)
         except Exception as e:
             self.errors.append(str(e))
+
+        # Si la variable es local a una función, asignar espacio en el frame
+        # Determinar frame_id: si estamos dentro de una función -> self.current_method
+        frame_id = self.current_method or "global"
+        # Solo si hay un frame (existe en fm)
+        size = self.frame_manager.size_of_type(getattr(declared, "name", None) if declared else None)
+        # Compute allocate_local only if we have a function frame or want to allocate globals too
+        # Ensure frame exists:
+        if frame_id not in self.frame_manager.all_frames():
+            self.frame_manager.enter_frame(frame_id)
+        try:
+            off = self.frame_manager.allocate_local(frame_id, name, type_name=getattr(declared, "name", None), size=size)
+            self.frame_manager.attach_runtime_info(self.table, name, frame_id, category="local", size=size)
+        except KeyError:
+            # ya existe; continuar sin colapsar
+            pass
+
 
         if ctx.initializer() and not compatible(declared, init_ty):
             self._error(
@@ -1316,12 +1336,11 @@ class AstAndSemantic(CompiscriptListener):
             else:
                 raise
 
-
     def enterFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
         name = ctx.Identifier().getText()
         self.current_method = name
 
-        # Firma: params
+        # Recolectar params
         params = []
         if ctx.parameters():
             for pctx in ctx.parameters().parameter():
@@ -1330,11 +1349,11 @@ class AstAndSemantic(CompiscriptListener):
                 pty  = _parse_type_text(ptxt) or NULL
                 params.append((pname, pty))
 
-        # Tipo de retorno (opcional)
+        # Tipo de retorno
         rtxt = _get_type_text_from_ctx(ctx)
         ret  = _parse_type_text(rtxt) or NULL
 
-        # Define símbolo de función ANTES de su cuerpo (recursión permitida)
+        # metadata de la función/método
         meta = {
             "kind": "func",
             "params": [t for _, t in params],
@@ -1342,36 +1361,80 @@ class AstAndSemantic(CompiscriptListener):
             "arity": len(params),
             "ret": ret,
         }
-        # Atrapa duplicados en el mismo ámbito
-        try:
-            self._define_symbol(name, ret, metadata=meta, err_ctx=ctx)
-        except Exception as e:
-            # deja registro pero NO abortes el walk
-            self.errors.append(str(e))
 
-        # Si estamos dentro de una clase, agregarlo al frame
+        # Si estamos dentro de una clase, registrar como método en la metadata de la clase.
         if self.current_class and self._class_frames:
-            frame = self._class_frames[-1]
-            meta = {
-                "kind": "method",
-                "params": [t for _, t in params],
-                "ret": ret,
-            }
-            frame["methods"][name] = Symbol(name, "func", metadata=meta)
-            if name == "constructor":
-                frame["methods"]["constructor"] = Symbol("constructor", "func", metadata=meta)
-            frame["symbol"].metadata["methods"] = frame["methods"]
+            class_frame = self._class_frames[-1]
+            # crear Symbol para el método y guardarlo en el frame de la clase
+            method_sym = Symbol(name, None, metadata=meta)
+            class_frame["methods"][name] = method_sym
+            # mantener sincronizada la metadata en el símbolo de la clase
+            class_frame["symbol"].metadata["methods"] = class_frame["methods"]
+        else:
+            # función top-level: definir en la tabla para permitir recursion y llamadas
+            try:
+                self._define_symbol(name, ret, metadata=meta, err_ctx=ctx)
+            except Exception as e:
+                self.errors.append(str(e))
 
-        # Scope de función + parámetros
+        # frame id: calificar con la clase si corresponde para evitar colisiones
+        frame_id = f"{self.current_class}.{name}" if self.current_class else name
+        # crear/entrar al frame para la función/método
+        self.frame_manager.enter_frame(frame_id)
+
+        # entrar al scope semántico de la función
         self._enter_scope()
         self.func_ret_stack.append(ret)
+
+        # Definir parámetros en la tabla de símbolos (scope actual) y asociar runtime info
         for pname, pty in params:
-            self._define_symbol(pname, pty, err_ctx=ctx)
+            # 1) definir símbolo en el scope actual (esto detecta redeclaraciones)
+            try:
+                self._define_symbol(pname, pty, err_ctx=ctx)
+            except Exception as e:
+                self.errors.append(str(e))
+                # si falló la definición, evitamos intentar asignar runtime info
+                continue
+
+            # 2) asegurar existencia del frame y obtenerlo
+            if frame_id not in self.frame_manager.all_frames():
+                self.frame_manager.enter_frame(frame_id)
+            frame = self.frame_manager.current_frame()
+
+            # 3) calcular tamaño siempre (para pasar a attach_runtime_info)
+            size = self.frame_manager.size_of_type(getattr(pty, "name", None))
+            # 4) Si el parámetro no existe todavía en el frame, intentar asignarlo
+            existing = frame.get_symbol(pname) if frame is not None else None
+            if existing is None:
+                try:
+                    self.frame_manager.allocate_param(frame_id, pname, type_name=getattr(pty, "name", None), size=size)
+                except KeyError:
+                    # si hay colisión, registramos el error pero no rompemos todo
+                    self.errors.append(f"[linea {getattr(ctx.start, 'line', 1)}] error al asignar parametro '{pname}' en frame '{frame_id}'")
+
+            # 5) adjuntar metadata runtime al símbolo en la tabla (attach_runtime_info ahora es idempotente)
+            attached = self.frame_manager.attach_runtime_info(self.table, pname, frame_id, category="param", size=size)
+            # attached == False => el símbolo no fue encontrado (raro aquí), continuar
+
 
     def exitFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
         name = ctx.Identifier().getText()
+        # reconstruir AST del cuerpo y los params si no se ha creado antes
+        # obtener tipo de retorno (intentar desde metadata o contexto)
+        rtxt = _get_type_text_from_ctx(ctx)
+        ret  = _parse_type_text(rtxt) or NULL
 
+        # conseguir body (el block ya fue procesado y está en self.ast)
+        body_node = None
+        try:
+            if ctx.block():
+                body_node = self.ast.get(ctx.block())
+        except Exception:
+            body_node = None
+
+        # recuperar params desde el scope o desde la metadata (más simple: extraer de metadata si existe)
         params = []
+        # intentamos recuperar los nombres de params desde el AST del ctx si queremos consistencia
         if ctx.parameters():
             for pctx in ctx.parameters().parameter():
                 pname = pctx.Identifier().getText()
@@ -1379,22 +1442,36 @@ class AstAndSemantic(CompiscriptListener):
                 pty  = _parse_type_text(ptxt) or NULL
                 params.append((pname, pty))
 
-        rtxt = _get_type_text_from_ctx(ctx)
-        ret  = _parse_type_text(rtxt) or NULL
-        body = self.ast.get(ctx.block())
-
-        node = FuncDecl(name=name, params=params, ret=ret, body=body, ty=ret)
+        # crear el nodo FuncDecl y mapearlo
+        node = FuncDecl(name=name, params=params, ret=ret, body=body_node, ty=ret)
         self.ast[ctx] = node
+
         # Verificación de "todas las rutas retornan" para funciones con ret != NULL
         if ret != NULL:
-            body_block = body
-            if not self._block_guarantees_return(body_block):
+            body_block = body_node
+            if body_block is not None and not self._block_guarantees_return(body_block):
                 line = getattr(ctx.start, "line", 1)
                 self.errors.append(f"[linea {line}] falta 'return' en funcion '{name}' de tipo {ret}")
+
+        # salir del scope semantic: un solo pop y un solo exit_scope
+        if self.func_ret_stack:
+            self.func_ret_stack.pop()
+        self._exit_scope()
+
+        # cerrar el frame correspondiente (pop del stack del FrameManager)
+        frame_id = f"{self.current_class}.{name}" if self.current_class else name
+        try:
+            # si el top del FrameManager corresponde a frame_id, hacer exit. 
+            # (si no, aún ejecutamos exit_frame y confiamos en implementación para recuperar)
+            self.frame_manager.exit_frame()
+        except Exception:
+            # no queremos que un fallo aquí rompa toda la semántica; registrar si lo deseas
+            pass
+
+        # limpiar current_method
         self.current_method = None
 
-        self.func_ret_stack.pop()
-        self._exit_scope()
+
     
     def enterClassDeclaration(self, ctx: CompiscriptParser.ClassDeclarationContext):
         cls_name = ctx.Identifier(0).getText()
@@ -1493,6 +1570,8 @@ class AstAndSemantic(CompiscriptListener):
             # nota: el test espera "[line ...]" (en inglés)
             self.errors.append(f"[line {line}] llamada a 'break' invalida fuera iterador")
         return
+    
+
 
 
     # def exitCallExpr(self, ctx: CompiscriptParser.CallExprContext):

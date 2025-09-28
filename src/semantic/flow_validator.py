@@ -30,13 +30,14 @@ class FlowValidator(CompiscriptVisitor):
         return self.visitChildren(ctx)
 
     def visitIfStatement(self, ctx):
-        # ctx.expression() es la condición
+        # condicion exacta
         cond = ctx.expression()
         text = cond.getText()
         if text not in ("true", "false"):
-            line = ctx.start.line
+            line = getattr(cond.start, "line", getattr(ctx.start, "line", 1))
             self.errors.append(f"[linea {line}] condicion de 'if' no es boolean: {text!r}")
         return self.visitChildren(ctx)
+
 
     def visitWhileStatement(self, ctx):
         text = ctx.expression().getText()

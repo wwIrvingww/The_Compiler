@@ -214,8 +214,8 @@ def _label(n: ASTNode) -> str:
     if isinstance(n, Program):     return "Program"
     if isinstance(n, Block):       return "Block"
     if isinstance(n, VarDecl): declared = f"{n.declared_type}" if n.declared_type else "—"; inferred = f"{n.ty}"; return f"VarDecl name={n.name} const={n.is_const} declared={declared} ty={inferred}" #cuando declared is None mejor rotular inferred=integer en la etiqueta para más slay
-    if isinstance(n, Assign):      
-            return f"Assign ty={n.dest.ty} \'{n.dest.name}\'{" at \'"+str(n.index.value)+"\'" if n.index else ""}"
+    if isinstance(n, Assign):
+        return f"Assign ty={n.dest.ty} '{n.dest.name}'{f' at {n.index.value!r}' if n.index else ''}"
     if isinstance(n, BinaryOp):    return f"BinaryOp '{n.op}' ty={n.ty}"
     if isinstance(n, UnaryOp):     return f"UnaryOp '{n.op}' ty={n.ty}"
     if isinstance(n, Identifier):  return f"Identifier {n.name} ty={n.ty}"

@@ -24,6 +24,20 @@ class Symbol:
     def __repr__(self):
         return f"Symbol(name={self.name!r}, type={self.type!r}, metadata={self.metadata})"
 
+    def set_runtime_info(self, offset: int, frame_id: str, category: str) -> None:
+        """
+        Guardar información de ejecución (layout de runtime).
+        category: 'param', 'local', 'global', etc.
+        """
+        self.metadata.update({
+            "offset": offset,
+            "frame": frame_id,
+            "category": category
+        })
+
+    def get_runtime_info(self) -> Dict[str, Any]:
+        return {k: v for k, v in self.metadata.items() if k in ("offset", "frame", "category")}
+
 
 class SymbolTable:
     def __init__(self):
@@ -129,3 +143,11 @@ class SymbolTable:
         if sym and sym.type == "class":
             return sym
         return None
+    
+    def define_runtime(self, name: str, sym_type: Any, frame_id: str, category: str, offset: int) -> bool:
+        """
+        Define un símbolo con metadata de runtime (offset en frame, categoría).
+        """
+        sym = Symbol(name, sym_type)
+        sym.set_runtime_info(offset=offset, frame_id=frame_id, category=category)
+        return self.define(sym)

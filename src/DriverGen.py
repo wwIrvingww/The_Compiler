@@ -20,17 +20,14 @@ def main(argv):
     if sem_listener.errors:
         print("== ERRORES SEMÁNTICOS ==")
         for e in sem_listener.errors: print("•", e)
-
-
-    print("\n== AST ==")
-    print(render_ascii(sem_listener.program))
-    # Genera imagen (ast.png por defecto) o DOT de fallback
-    try:
-        path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
-        print(f"\n[OK] AST exportado a: {path}")
-    except Exception as e:
-        print(f"\n[WARN] No se pudo exportar imagen: {e}\nSe generó ast.dot (puedes correr `dot -Tpng ast.dot -o ast.png`).")
-
+    else:
+        tac_gen = TacGenerator(sem_listener.table)
+        tac_gen.visit(tree)
+        taco = "\n".join(str(op) for op in tac_gen.code)
+        print(taco)
+        with open(f"{argv[1]}.tac", "w") as f:
+            f.write(taco)
+    
 
 if __name__ == '__main__':
     main(sys.argv)

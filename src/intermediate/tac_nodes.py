@@ -36,6 +36,9 @@ class TACOP:
             parts.append(f"{self.result} =")
             parts.append(op)
             parts.append(str(self.arg1))
+        elif op in ["label", "goto"]:
+            parts.append(op)
+            parts.append(str(self.result))
         else:
             if self.result is not None:
                 parts.append(f"{self.result} =")
@@ -56,3 +59,8 @@ class IRNode:
 @dataclass
 class IRAssign(IRNode):
     name: str = None
+    
+@dataclass
+class IRBlock(IRNode):
+    start_label : Any = None
+    end_label : Any = None

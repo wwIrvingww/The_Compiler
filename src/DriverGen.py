@@ -23,10 +23,14 @@ def main(argv):
     else:
         tac_gen = TacGenerator(sem_listener.table)
         tac_gen.visit(tree)
-        taco = "\n".join(str(op) for op in tac_gen.code)
-        print(taco)
-        with open(f"{argv[1]}.tac", "w") as f:
-            f.write(taco)
+        pretty_tac = "\n".join(str(op) for op in tac_gen.code)
+        print(pretty_tac)
+        with open(f"{argv[1]}.pretty_tac", "w") as f:
+            f.write(pretty_tac)
+            
+        raw_tac = "\n".join(f"{op.op},{op.arg1},{op.arg2},{op.result}" for op in tac_gen.code)
+        with open(f"{argv[1]}.raw_tac", "w") as f:
+            f.write(raw_tac)
     
 
 if __name__ == '__main__':

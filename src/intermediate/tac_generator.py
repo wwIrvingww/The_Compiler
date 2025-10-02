@@ -15,43 +15,11 @@ class TacGenerator(CompiscriptVisitor):
         self.temp_allocator = TempAllocator(prefix="t", start=0)
         self.const_scopes : List[set] = [set()]
 
-    # Hooks de localización
-    def _place_of_identifier(self, id_text: str) -> str:
-        # Uso a futuro: usa self.sem_table + runtime_layout para mapear a [fp+off] o registro.
-        return id_text
-
-    def _place_of_property(self, obj_place: str, prop_name: str) -> str:
-        return f"{obj_place}.{prop_name}"
-
-    def _place_of_index(self, base_place: str, index_place: str) -> str:
-        # Uso a futuro: load/store con desplazamiento.
-        return f"{base_place}[{index_place}]"
-
+    # ==============================================================
+    # ||  [0] Aux Functions
+    # ==============================================================
+    
     # hooks de TAC
-    def _emit_assign(self, dst: str, src: str, code: list):
-        code.append(TACOP(op="=", arg1=src, result=dst))
-
-    def _emit_bin(self, op_tok: str, a: str, b: str, code: list) -> str:
-        binmap = {
-            "+":"+", "-":"-", "*":"*", "/":"/", "%":"%",
-            "==":"==", "!=":"!=", "<":"<", "<=":"<=", ">":">", ">=":">=",
-            "&&":"&&", "||":"||",
-        }
-        op = binmap[op_tok]
-        t = self._new_temp()
-        code.append(TACOP(op=op, arg1=a, arg2=b, result=t))
-        return t
-
-    def _emit_un(self, op_tok: str, a: str, code: list) -> str:
-        op = "uminus" if op_tok == "-" else ("not" if op_tok == "!" else op_tok)
-        t = self._new_temp()
-        code.append(TACOP(op=op, arg1=a, result=t))
-        return t
-
-    # hooks de control de flujo
-    def _emit_label(self, lab: str, code: list):
-        code.append(TACOP(op="label", result=lab))
-
     def _emit_goto(self, lab: str, code: list):
         code.append(TACOP(op="goto", arg1=lab))
 
@@ -64,28 +32,42 @@ class TacGenerator(CompiscriptVisitor):
             code.append(TACOP(op="if-goto", arg1=t, arg2=lab))
 
     # hooks de llamadas
-    def _emit_call(self, fname: str, arg_places: list[str], code: list) -> str:
-        for p in arg_places:
-            code.append(TACOP(op="param", arg1=p)) 
-        code.append(TACOP(op="call", arg1=fname, arg2=str(len(arg_places))))
+    # def _emit_call(self, fname: str, arg_places: list[str], code: list) -> str:
+    #     for p in arg_places:
+    #         code.append(TACOP(op="param", arg1=p)) 
+    #     code.append(TACOP(op="call", arg1=fname, arg2=str(len(arg_places))))
+    #     t = self._new_temp()
+    #     code.append(TACOP(op="=", arg1="ret", result=t))
+    #     return t
+
+
+
+    ############################### Useful
+    def _emit_assign(self, dst: str, src: str, code: list):
+        code.append(TACOP(op="=", arg1=src, result=dst))
+
+    
+    def _emit_label(self, label:str, code: list):
+        code.append(TACOP(op="label", result=label))
+    
+    def _emit_un(self, op_tok: str, a: str, code: list) -> str:
+        op = "uminus" if op_tok == "-" else ("not" if op_tok == "!" else op_tok)
         t = self._new_temp()
-        code.append(TACOP(op="=", arg1="ret", result=t))
+        code.append(TACOP(op=op, arg1=a, result=t))
         return t
-
-    # hook para mostrar el tac como lista y evitar errores
-    def get_code(self) -> list:
-        return list(self.code)
-
-    # ==============================================================
-    # ||  [0] Aux Functions
-    # ==============================================================
+    
+    def _emit_bin(self, op_tok: str, a: str, b: str, code: list) -> str:
+        op = op_tok
+        t = self._new_temp()
+        code.append(TACOP(op=op, arg1=a, arg2=b, result=t))
+        return t
+    
     def _new_temp(self):
         return self.temp_allocator.new_temp()
             
     def _new_label(self):
         return self.label_generator.new_label()
-            
-            
+               
     def _enter_scope(self):
         self.sem_table.enter_scope()
         self.tac_table.enter_scope()
@@ -144,21 +126,17 @@ class TacGenerator(CompiscriptVisitor):
     
     def visitRelationalExpr(self, ctx):
         if len(ctx.additiveExpr()) == 1:
+            # Unary case
             sub = self.visit(ctx.additiveExpr(0))
             return sub
+        # Binary case
         left = self.visit(ctx.additiveExpr(0))
         op = ctx.getChild(1).getText()
         right = self.visit(ctx.additiveExpr(1))
-        temp = self._new_temp()
+        
         code = left.code + right.code
-        code.append(
-            TACOP(
-                op = op,
-                result=temp,
-                arg1=left.place,
-                arg2=right.place
-            )
-        )
+        temp = self._emit_bin(op, left.place, right.place, code)
+        
         return IRNode(
             place=temp,
             code=code
@@ -171,16 +149,10 @@ class TacGenerator(CompiscriptVisitor):
         left = self.visit(ctx.relationalExpr(0))
         op = ctx.getChild(1).getText()
         right = self.visit(ctx.relationalExpr(1))
-        temp = self._new_temp()
+        
         code = left.code + right.code
-        code.append(
-            TACOP(
-                op = op,
-                result=temp,
-                arg1=left.place,
-                arg2=right.place
-            )
-        )
+        temp = self._emit_bin(op, left.place, right.place, code)
+        
         return IRNode(
             place=temp,
             code=code
@@ -192,16 +164,10 @@ class TacGenerator(CompiscriptVisitor):
             return sub
         left = self.visit(ctx.equalityExpr(0))
         right = self.visit(ctx.equalityExpr(1))
-        temp = self._new_temp()
+        
         code = left.code + right.code
-        code.append(
-            TACOP(
-                op = "&&",
-                result=temp,
-                arg1=left.place,
-                arg2=right.place
-            )
-        )
+        temp = self._emit_bin("&&", left.place, right.place, code)
+        
         return IRNode(
             place=temp,
             code=code
@@ -214,16 +180,10 @@ class TacGenerator(CompiscriptVisitor):
         
         left = self.visit(ctx.logicalAndExpr(0))
         right = self.visit(ctx.logicalAndExpr(1))
-        temp = self._new_temp()
+        
         code = left.code + right.code
-        code.append(
-            TACOP(
-                op = "||",
-                result=temp,
-                arg1=left.place,
-                arg2=right.place
-            )
-        )
+        temp = self._emit_bin("||", left.place, right.place, code)
+        
         return IRNode(
             place=temp,
             code=code
@@ -237,16 +197,9 @@ class TacGenerator(CompiscriptVisitor):
         op = ctx.getChild(1).getText()
         right = self.visit(ctx.unaryExpr(1))
         
-        temp = self._new_temp()
         code = left.code + right.code
-        code.append(
-            TACOP(
-                op = op,
-                result=temp,
-                arg1=left.place,
-                arg2=right.place
-            )
-        )
+        temp = self._emit_bin(op, left.place, right.place, code)
+        
         return IRNode(
             place=temp,
             code=code
@@ -259,16 +212,10 @@ class TacGenerator(CompiscriptVisitor):
         left = self.visit(ctx.multiplicativeExpr(0))
         op = ctx.getChild(1).getText()
         right = self.visit(ctx.multiplicativeExpr(1))
-        temp = self._new_temp()
+        
         code = left.code + right.code
-        code.append(
-            TACOP(
-                op = op,
-                result=temp,
-                arg1=left.place,
-                arg2=right.place
-            )
-        )
+        temp = self._emit_bin(op, left.place, right.place, code)
+        
         return IRNode(
             place=temp,
             code=code
@@ -282,21 +229,13 @@ class TacGenerator(CompiscriptVisitor):
         if ctx.getChildCount() == 1:
             sub1 = self.visit(ctx.primaryExpr())
             return sub1
-        op = ctx.getChild(0).getText()
-        if op == "-":
-            op = "uminus"
-        if op == "!":
-            op == "not"
+        
         sub = self.visit(ctx.unaryExpr())
-        temp = self._new_temp()
+        op = ctx.getChild(0).getText()
+        
         code = sub.code
-        code.append(
-            TACOP(
-                op=op,
-                result=temp,
-                arg1=sub.place
-            )
-        )
+        temp = self._emit_un(op, sub.place, code)
+        
         return IRNode(
             place = temp,
             code = code
@@ -304,16 +243,15 @@ class TacGenerator(CompiscriptVisitor):
     
     def visitPrimaryExpr(self, ctx):
         place = self._new_temp()
+        val = ctx.getText()
+        
+        code = []
+        self._emit_assign(dst=place, src=val, code=code)
+        
         return IRNode(
             place=place,
-            value = ctx.getText(),
-            code = [
-                TACOP(
-                    op="=",
-                    result=place,
-                    arg1=ctx.getText()
-                )
-            ]
+            value = val,
+            code = code
         )
     
     # ==============================================================
@@ -332,13 +270,9 @@ class TacGenerator(CompiscriptVisitor):
         if init:
             expr_rslt = self.visit(init.expression())
             code = expr_rslt.code
-            code.append(
-                TACOP(
-                    op="=",
-                    arg1=expr_rslt.place,
-                    result=id
-                )
-            )
+            
+            self._emit_assign(dst=id, src=expr_rslt.place, code=code)
+  
             node = IRAssign(
                 place=id,
                 name=id,
@@ -364,13 +298,8 @@ class TacGenerator(CompiscriptVisitor):
                 
                 rhs = self.visit(ctx.expression(0))
                 code = rhs.code
-                code.append(
-                    TACOP(
-                        op="=",
-                        result=id,
-                        arg1=rhs.place
-                    )
-                )
+                self._emit_assign(dst=id, src=rhs.place, code=code)
+                
                 node = IRAssign(
                     place=id,
                     name=id,
@@ -384,9 +313,9 @@ class TacGenerator(CompiscriptVisitor):
     def visitLiteralExpr(self, ctx):
         val = ctx.getText()
         place = self._new_temp()
-        code = [TACOP(
-            op="=", arg1=val, result=place
-        )]
+        code = []
+        self._emit_assign(dst=place, src=val, code=code)
+
         return IRNode(place=place, code=code)
     
     
@@ -397,15 +326,13 @@ class TacGenerator(CompiscriptVisitor):
     def visitBlock(self, ctx):
         self._enter_scope()
         stmts = ctx.statement()
-        start = self._new_label()
-        end = self._new_label()
+        
+        start_label = self._new_label()
+        end_label = self._new_label()
+        code = []
         # Append start label to block
-        code = [
-            TACOP(
-                op="label",
-                result=start
-            )
-        ]
+        self._emit_label(start_label, code)
+        
         # Navigate statements
         if stmts:
             for s in stmts:
@@ -413,15 +340,10 @@ class TacGenerator(CompiscriptVisitor):
                 code = code + tem.code
                 
         # Append end to the block
-        code.append(
-            TACOP(
-                op="label",
-                result=end
-            )
-        )
+        self._emit_label(end_label, code)
         node= IRBlock(
-            start_label= start,
-            end_label=end,
+            start_label= start_label,
+            end_label=end_label,
             code = code
         )
         return node

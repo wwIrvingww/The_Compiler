@@ -6,32 +6,62 @@ from typing import List, Optional, Union, Any, Iterable, Literal
 @dataclass
 class TACOP:
     op : Literal[
-        "=",  # Assignment
-        "==", "!=", "<", ">", "<=", ">=", # Relational
-        "uminus", "not", # Unary
-        "||", "&&", # Logic
-        "*", "/", "%", # Mult
+        # Assignment
+        "=",  
+        
+        # Relational
+        "==", "!=", "<", ">", "<=", ">=",
+        
+        # Unary
+        "uminus", "not",
+        
+        # Logic Gates
+        "||", "&&",
+        
+        # Mult
+        "*", "/", "%", 
+        
+        # add
         "+", "-",
+        
+        # Flow
         "goto", "if-goto", "label", # Flow
-        "call", "return" ,# Functions
-        "load", "store", "move", # Memory
-        "nop" # DEFAULT
+        
+        # Functions
+        "call", "return" ,
+        
+        # Memory
+        "load", "store", "move",
+        
+        ## Special tags ##
+        "LOAD_IDX",
+        "STORE_IDX",
+
+        "LOAD_PROP",
+        "STORE_PROP"
+        
+        # DEFAULT
+        "nop"
     ] = "nop"
     arg1 : Optional[str] = None
     arg2 : Optional[str] = None
     result :Optional[str] = None 
 
+
+    ## Esta funcion es solo para imprimir el tac bonito. 
+    ## No cambia como esta guardado ni nada, solo es para poder escribirlo/leerlo de manera bonita
     def __str__(self):
         parts = []
         op = self.op
+        
         if op=="=":
-            if self.result is not None:
-                parts.append(f"{self.result}")
+            parts.append(str(self.result))
             parts.append(op)
             if self.arg1 is not None:
                 parts.append(str(self.arg1))
             if self.arg2 is not None:
                 parts.append(", "+str(self.arg2))
+                
         elif op in ["!", "uminus"]:
             parts.append(f"{self.result} =")
             parts.append(op)
@@ -40,8 +70,7 @@ class TACOP:
             parts.append(op)
             parts.append(str(self.result))
         else:
-            if self.result is not None:
-                parts.append(f"{self.result} =")
+            parts.append(f"{self.result} =")
             if self.arg1 is not None:
                 parts.append(str(self.arg1))
             parts.append(op)

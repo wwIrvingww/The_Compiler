@@ -15,6 +15,67 @@ class TacGenerator(CompiscriptVisitor):
         self.temp_allocator = TempAllocator(prefix="t", start=0)
         self.const_scopes : List[set] = [set()]
 
+    # Hooks de localización
+    def _place_of_identifier(self, id_text: str) -> str:
+        # Uso a futuro: usa self.sem_table + runtime_layout para mapear a [fp+off] o registro.
+        return id_text
+
+    def _place_of_property(self, obj_place: str, prop_name: str) -> str:
+        return f"{obj_place}.{prop_name}"
+
+    def _place_of_index(self, base_place: str, index_place: str) -> str:
+        # Uso a futuro: load/store con desplazamiento.
+        return f"{base_place}[{index_place}]"
+
+    # hooks de TAC
+    def _emit_assign(self, dst: str, src: str, code: list):
+        code.append(TACOP(op="=", arg1=src, result=dst))
+
+    def _emit_bin(self, op_tok: str, a: str, b: str, code: list) -> str:
+        binmap = {
+            "+":"+", "-":"-", "*":"*", "/":"/", "%":"%",
+            "==":"==", "!=":"!=", "<":"<", "<=":"<=", ">":">", ">=":">=",
+            "&&":"&&", "||":"||",
+        }
+        op = binmap[op_tok]
+        t = self._new_temp()
+        code.append(TACOP(op=op, arg1=a, arg2=b, result=t))
+        return t
+
+    def _emit_un(self, op_tok: str, a: str, code: list) -> str:
+        op = "uminus" if op_tok == "-" else ("not" if op_tok == "!" else op_tok)
+        t = self._new_temp()
+        code.append(TACOP(op=op, arg1=a, result=t))
+        return t
+
+    # hooks de control de flujo
+    def _emit_label(self, lab: str, code: list):
+        code.append(TACOP(op="label", result=lab))
+
+    def _emit_goto(self, lab: str, code: list):
+        code.append(TACOP(op="goto", arg1=lab))
+
+    def _emit_if_goto(self, cond_place: str, lab: str, code: list, negated=False):
+        if not negated:
+            code.append(TACOP(op="if-goto", arg1=cond_place, arg2=lab))
+        else:
+            t = self._new_temp()
+            code.append(TACOP(op="not", arg1=cond_place, result=t))
+            code.append(TACOP(op="if-goto", arg1=t, arg2=lab))
+
+    # hooks de llamadas
+    def _emit_call(self, fname: str, arg_places: list[str], code: list) -> str:
+        for p in arg_places:
+            code.append(TACOP(op="param", arg1=p)) 
+        code.append(TACOP(op="call", arg1=fname, arg2=str(len(arg_places))))
+        t = self._new_temp()
+        code.append(TACOP(op="=", arg1="ret", result=t))
+        return t
+
+    # hook para mostrar el tac como lista y evitar errores
+    def get_code(self) -> list:
+        return list(self.code)
+
     # ==============================================================
     # ||  [0] Aux Functions
     # ==============================================================

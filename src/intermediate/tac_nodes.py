@@ -62,14 +62,25 @@ class TACOP:
             if self.arg2 is not None:
                 parts.append(", "+str(self.arg2))
                 
-        elif op in ["!", "uminus"]:
+        elif op in ["not", "uminus"]: # mejor usar 'not' (no '!')
             parts.append(f"{self.result} =")
             parts.append(op)
             parts.append(str(self.arg1))
-        elif op in ["label", "goto"]:
-            parts.append(op)
-            parts.append(str(self.result))
+        elif op == "label":
+            # imprime "label Lk"
+            parts.append("label")
+            parts.append(str(self.result or self.arg1))
+        elif op == "goto":
+            # imprime "goto Lk"
+            parts.append("goto")
+            parts.append(str(self.arg1 or self.result))
+        elif op == "if-goto":
+            # imprime "if tX goto Lk"
+            parts.append(f"if {self.arg1} goto {self.arg2}")
+        elif op == "return":
+            parts.append("return" + (f" {self.arg1}" if self.arg1 is not None else ""))
         else:
+            # binarios: "tZ = a OP b"
             parts.append(f"{self.result} =")
             if self.arg1 is not None:
                 parts.append(str(self.arg1))

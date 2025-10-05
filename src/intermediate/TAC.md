@@ -1,7 +1,3 @@
-Perfecto 💪 aquí tienes un **documento completamente nuevo y actualizado** sobre el **Formato del Código Intermedio (TAC)**, adaptado al sistema que ya implementaste —incluyendo tu esquema real de `TACOP`, temporales, etiquetas, y la semántica de flujo que estás generando (if, while, for, foreach, switch, etc.).
-
----
-
 # 🧠 Formato del Código Intermedio (TAC)
 
 ## 🏗️ Estructura General

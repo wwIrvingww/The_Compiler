@@ -14,6 +14,9 @@ class TacGenerator(CompiscriptVisitor):
         self.label_generator = LabelGenerator(prefix="L", start=0)
         self.temp_allocator = TempAllocator(prefix="t", start=0)
         self.const_scopes : List[set] = [set()]
+        self.break_stack: List[str] = []
+        self.continue_stack: List[str] = []
+
 
     # ==============================================================
     # ||  [0] Aux Functions
@@ -159,6 +162,10 @@ class TacGenerator(CompiscriptVisitor):
         Lend  = self._new_label()
 
         code = []
+        # gestionar break/continue
+        self.continue_stack.append(Lcond)
+        self.break_stack.append(Lend)
+
         self._emit_label(Lcond, code)
 
         cond = self.visit(ctx.expression())
@@ -172,6 +179,10 @@ class TacGenerator(CompiscriptVisitor):
         self._emit_goto(Lcond, code)
 
         self._emit_label(Lend, code)
+        # pop stacks
+        self.continue_stack.pop()
+        self.break_stack.pop()
+
         return IRNode(code=code)
 
     # DO ... WHILE
@@ -182,6 +193,10 @@ class TacGenerator(CompiscriptVisitor):
         Lend  = self._new_label()
 
         code = []
+        # en do..while, continue debe saltar a Lcond (chequear condición)
+        self.continue_stack.append(Lcond)
+        self.break_stack.append(Lend)
+
         self._emit_label(Lbody, code)
         body = self.visit(ctx.block())
         code += body.code
@@ -193,6 +208,10 @@ class TacGenerator(CompiscriptVisitor):
         self._emit_goto(Lend, code)
 
         self._emit_label(Lend, code)
+
+        self.continue_stack.pop()
+        self.break_stack.pop()
+
         return IRNode(code=code)
 
     # FOR
@@ -204,21 +223,17 @@ class TacGenerator(CompiscriptVisitor):
 
         # init
         if ctx.variableDeclaration():
-            init_node = self.visit(ctx.variableDeclaration())
-            if init_node: code += init_node.code
+            init_node = self.visit(ctx.variableDeclaration());  code += init_node.code if init_node else []
         elif ctx.assignment():
-            init_node = self.visit(ctx.assignment())
-            if init_node: code += init_node.code
+            init_node = self.visit(ctx.assignment());           code += init_node.code if init_node else []
 
         # cond y update
         cond_node, upd_node = None, None
         if ctx.expression():
             exprs = ctx.expression()
             if isinstance(exprs, list):
-                if len(exprs) >= 1:
-                    cond_node = self.visit(exprs[0])
-                if len(exprs) >= 2:
-                    upd_node  = self.visit(exprs[1])
+                if len(exprs) >= 1: cond_node = self.visit(exprs[0])
+                if len(exprs) >= 2: upd_node  = self.visit(exprs[1])
             else:
                 cond_node = self.visit(exprs)
 
@@ -226,6 +241,10 @@ class TacGenerator(CompiscriptVisitor):
         Lbody = self._new_label()
         Lstep = self._new_label()
         Lend  = self._new_label()
+
+        # gestionar break/continue
+        self.continue_stack.append(Lstep)
+        self.break_stack.append(Lend)
 
         # condición
         self._emit_label(Lcond, code)
@@ -236,24 +255,24 @@ class TacGenerator(CompiscriptVisitor):
         else:
             self._emit_goto(Lbody, code)
 
-        # cuerpo
+        # body
         self._emit_label(Lbody, code)
         body_node = self.visit(ctx.block())
         code += body_node.code
         self._emit_goto(Lstep, code)
 
-        # update
+        # step
         self._emit_label(Lstep, code)
         if upd_node is not None:
             code += upd_node.code
-            # ⚠️ importante: asegurar que el resultado vuelva a la var
-            if hasattr(upd_node, "place") and upd_node.place:
-                target = ctx.expression()[1].getText().split("=")[0].strip()
-                self._emit_assign(dst=target, src=upd_node.place, code=code)
         self._emit_goto(Lcond, code)
 
         # fin
         self._emit_label(Lend, code)
+        # en este mejor ponemos continue hacia el step, no a la condición
+        self.continue_stack.pop()
+        self.break_stack.pop()
+
         return IRNode(code=code)
 
     # RETURN
@@ -267,6 +286,23 @@ class TacGenerator(CompiscriptVisitor):
             code.append(TACOP(op="return"))
         return IRNode(code=code)
 
+    # BREAK
+    def visitBreakStatement(self, ctx):
+        # Salta al fin del lazo actual
+        if not self.break_stack:
+            return IRNode(code=[])  # semántica ya reporta error; acá evita crashear
+        code = []
+        self._emit_goto(self.break_stack[-1], code)
+        return IRNode(code=code)
+
+    # CONTINUE
+    def visitContinueStatement(self, ctx):
+        # Salta al "siguiente ciclo" (condición o step, según el lazo)
+        if not self.continue_stack:
+            return IRNode(code=[])
+        code = []
+        self._emit_goto(self.continue_stack[-1], code)
+        return IRNode(code=code)
 
     # ==============================================================
     # ||  [2] Ternary Expressions (operaciones en general)
@@ -528,7 +564,30 @@ class TacGenerator(CompiscriptVisitor):
 
         return IRNode(place=place, code=code)
     
+    def visitAssignExpr(self, ctx):
+        # ctx.lhs es un leftHandSide (labeled)
+        lhs_node = self.visit(ctx.lhs)                   # debe devolver algo con .place
+        rhs_node = self.visit(ctx.assignmentExpr())      # valor a asignar
+
+        code = []
+        if lhs_node and getattr(lhs_node, "code", None):
+            code += lhs_node.code
+        if rhs_node and getattr(rhs_node, "code", None):
+            code += rhs_node.code
+
+        # Asignación simple a variable (o a lo que retorne leftHandSide por ahora)
+        self._emit_assign(dst=lhs_node.place, src=rhs_node.place, code=code)
+
+        # Devuelve el 'place' del LHS como resultado de la expresión de asignación
+        return IRNode(place=lhs_node.place, code=code)
     
+    def visitPropertyAssignExpr(self, ctx):
+        # TODO: implementar propiedad obj.prop = ...
+        # Por ahora, para no crashear:
+        rhs_node = self.visit(ctx.assignmentExpr())
+        code = []
+        if rhs_node and rhs_node.code: code += rhs_node.code
+        return IRNode(place=rhs_node.place if rhs_node else None, code=code)
     # ==============================================================
     # ||  [5] Block Statement Flow
     # ==============================================================

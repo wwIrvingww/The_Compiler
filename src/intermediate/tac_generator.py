@@ -4,19 +4,19 @@ from typing import Optional, List, Dict, Any
 from symbol_table import SymbolTable
 from intermediate.labels import LabelGenerator
 from intermediate.temps import TempAllocator
-
+from symbol_table.runtime_layout import FrameManager
 
 class TacGenerator(CompiscriptVisitor):
     def __init__(self, symbol_table):
         self.sem_table = symbol_table
         self.tac_table = SymbolTable()
-        self.code : List['TACOP'] = []
+        self.frame_manager = FrameManager()  # 🔹 nuevo
+        self.code: List['TACOP'] = []
         self.label_generator = LabelGenerator(prefix="L", start=0)
         self.temp_allocator = TempAllocator(prefix="t", start=0)
-        self.const_scopes : List[set] = [set()]
+        self.const_scopes: List[set] = [set()]
         self.break_stack: List[str] = []
         self.continue_stack: List[str] = []
-
 
     # ==============================================================
     # ||  [0] Aux Functions
@@ -94,6 +94,7 @@ class TacGenerator(CompiscriptVisitor):
                 code = code + tem_node.code
 
         self.code = code
+        self.dump_runtime_info()
         return IRNode(code=code)
     
     def visitStatement(self, ctx):
@@ -722,6 +723,10 @@ class TacGenerator(CompiscriptVisitor):
                 name=id,
                 code = code
             )
+        frame_id = self.frame_manager.current_frame_id()
+        if frame_id:
+            size = self.frame_manager.size_of_type(getattr(ty, "name", None))
+            self.frame_manager.allocate_local(frame_id, id, type_name=getattr(ty, "name", None), size=size)
         self.tac_table.define(
             symbol_or_name=id,
             sym_type=ty,
@@ -743,7 +748,10 @@ class TacGenerator(CompiscriptVisitor):
                 rhs = self.visit(ctx.expression(0))
                 code = rhs.code
                 self._emit_assign(dst=id, src=rhs.place, code=code)
-                
+                frame_id = self.frame_manager.current_frame_id()
+                if frame_id:
+                    self.frame_manager.attach_runtime_info(self.sem_table, id, frame_id, category="local")
+
                 node = IRAssign(
                     place=id,
                     name=id,
@@ -850,3 +858,13 @@ class TacGenerator(CompiscriptVisitor):
         """
         name = ctx.Identifier().getText()
         return IRNode(place=name, code=[])
+    
+    def visitFunctionDeclaration(self,ctx):
+        pass
+
+    def dump_runtime_info(self):
+        print("\n== RUNTIME FRAMES ==")
+        for fid, frame in self.frame_manager._frames.items():
+            print(f"Frame '{fid}':")
+            for name, slot in frame.symbols.items():
+                print(f"   {name:10s} offset={slot.offset:3d} size={slot.size:2d} type={slot.type_name}")

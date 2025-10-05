@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>TacViewer — Compilador</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+body { font-family: system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; margin:12px; background:#05060a; color:#e6eef6; }
+.container { display:flex; gap:12px; }
+.panel { flex:1; background:#07121a; border-radius:8px; padding:12px; box-shadow: 0 6px 18px rgba(0,0,0,0.6); min-height:60vh; overflow:auto;}
+pre { white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size:13px; margin:0; color:#d7e6f0;}
+.header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+small.ts { color:#9fb7c9; font-size:12px; }
+.badge { font-size:12px; padding:6px 8px; border-radius:6px; background:#0b2b3a; color:#aee1c0;}
+</style>
+</head>
+<body>
+<h2>TAC Viewer</h2>
+<p>Actualización en vivo vía SSE; si quieres regenerar TAC automáticamente ejecuta el servidor con <code>--watch</code>.</p>
+<div class="container">
+  <div class="panel" id="tacpanel">
+    <div class="header"><strong>TAC (pretty)</strong> <small class="ts" id="tacstamp"></small></div>
+    <pre id="taccontent">(esperando TAC...)</pre>
+  </div>
+  <div class="panel" id="logpanel">
+    <div class="header"><strong>Logs</strong> <small class="ts" id="logstamp"></small></div>
+    <pre id="logs">(no hay logs todavía)</pre>
+  </div>
+</div>
+
+<script>
+async function fetchText(path) {
+  try {
+    const res = await fetch(path + "?_=" + Date.now(), {cache: "no-store"});
+    if (!res.ok) return null;
+    return await res.text();
+  } catch(e) { return null; }
+}
+async function refreshOnce() {
+  const t = await fetchText("/tac");
+  const l = await fetchText("/logs");
+  if (t !== null) {
+    document.getElementById("taccontent").textContent = t;
+    document.getElementById("tacstamp").textContent = new Date().toLocaleTimeString();
+  }
+  if (l !== null) {
+    document.getElementById("logs").textContent = l;
+    document.getElementById("logstamp").textContent = new Date().toLocaleTimeString();
+  }
+}
+
+// initial load
+refreshOnce();
+
+// SSE realtime updates
+if (window.EventSource) {
+  const ev = new EventSource("/events");
+  ev.addEventListener("open", function() {
+    console.log("[SSE] connected");
+  });
+  ev.addEventListener("init", function(e) {
+    console.log("[SSE] init:", e.data);
+  });
+  ev.addEventListener("update", function(e) {
+    // server may include a small preview in e.data; we still fetch full files
+    console.log("[SSE] update, refreshing");
+    refreshOnce();
+  });
+  ev.addEventListener("error", function(e) {
+    console.warn("[SSE] error", e);
+  });
+} else {
+  // fallback: periodic polling
+  setInterval(refreshOnce, 1000);
+}
+</script>
+</body>
+</html>

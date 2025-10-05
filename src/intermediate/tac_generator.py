@@ -99,23 +99,23 @@ class TacGenerator(CompiscriptVisitor):
     def visitStatement(self, ctx):
         child = (
             ctx.variableDeclaration() or    # ✅
-            ctx.constantDeclaration() or    # ⏳
+            ctx.constantDeclaration() or    # ✅
             ctx.assignment() or             # ⏳ 1/2 terminado, falta asignacion de propiedades
-            ctx.functionDeclaration() or    # 🚧 Not implemented yet
+            ctx.functionDeclaration() or    # ✅ Not implemented yet
             ctx.classDeclaration() or       # 🚧 Not implemented yet
             ctx.expressionStatement() or    # ⏳ pending
-            ctx.printStatement() or         # 💤 Not important
+            ctx.printStatement() or         # ✅ Not important
             ctx.block() or                  # ✅
-            ctx.ifStatement() or            # 🚧 Not implemented yet
-            ctx.whileStatement() or         # 🚧 Not implemented yet
-            ctx.doWhileStatement() or       # 🚧 Not implemented yet
-            ctx.forStatement() or           # 🚧 Not implemented yet
-            ctx.foreachStatement() or       # 🚧 Not implemented yet
+            ctx.ifStatement() or            # ✅ 
+            ctx.whileStatement() or         # ✅
+            ctx.doWhileStatement() or       # ✅
+            ctx.forStatement() or           # ✅
+            ctx.foreachStatement() or       # ✅
             ctx.tryCatchStatement() or      # 🚧 Not implemented yet
-            ctx.switchStatement() or        # 🚧 Not implemented yet
-            ctx.breakStatement() or         # 🚧 Not implemented yet
-            ctx.continueStatement() or      # 🚧 Not implemented yet
-            ctx.returnStatement()           # 🚧 Not implemented yet
+            ctx.switchStatement() or        # ✅
+            ctx.breakStatement() or         # ✅
+            ctx.continueStatement() or      # ✅
+            ctx.returnStatement()           # ✅
         )
         return self.visit(child)
 
@@ -275,6 +275,104 @@ class TacGenerator(CompiscriptVisitor):
 
         return IRNode(code=code)
 
+    # FOREACH
+    def visitForeachStatement(self, ctx):
+        item_name = ctx.Identifier().getText()
+        arr_node  = self.visit(ctx.expression())
+
+        t_i   = self._new_temp()   # índice
+        t_n   = self._new_temp()   # longitud
+        Lcond = self._new_label()
+        Lbody = self._new_label()
+        Lstep = self._new_label()  #  bloque step
+        Lend  = self._new_label()
+
+        code = []
+        # __i = 0
+        self._emit_assign(dst=t_i, src="0", code=code)
+        # __n = len(arr)
+        if arr_node and arr_node.code: code += arr_node.code
+        code.append(TACOP(op="len", arg1=arr_node.place, result=t_n))
+
+        # gestionar break/continue
+        self.continue_stack.append(Lstep)   
+        self.break_stack.append(Lend)
+
+        # while (__i < __n)
+        self._emit_label(Lcond, code)
+        t_cmp = self._emit_bin("<", t_i, t_n, code)
+        self._emit_if_goto(t_cmp, Lbody, code)
+        self._emit_goto(Lend, code)
+
+        # body: item = arr[__i];
+        self._emit_label(Lbody, code)
+        t_item = self._new_temp()
+        code.append(TACOP(op="getidx", arg1=arr_node.place, arg2=t_i, result=t_item))
+        self._emit_assign(dst=item_name, src=t_item, code=code)
+
+        # cuerpo foreach
+        body = self.visit(ctx.block())
+        if body and body.code: code += body.code
+
+        # step: __i = __i + 1
+        self._emit_label(Lstep, code)
+        t_next = self._emit_bin("+", t_i, "1", code)
+        self._emit_assign(dst=t_i, src=t_next, code=code)
+        self._emit_goto(Lcond, code)
+
+        self._emit_label(Lend, code)
+
+        self.continue_stack.pop()
+        self.break_stack.pop()
+
+        return IRNode(code=code)
+
+    # SWITCH
+    def visitSwitchStatement(self, ctx):
+        """
+        switch '(' expression ')' '{' switchCase* defaultCase? '}'
+        """
+        scrut = self.visit(ctx.expression())
+        code = []
+        if scrut and scrut.code: code += scrut.code
+
+        cases = ctx.switchCase() or []
+        has_default = ctx.defaultCase() is not None
+
+        Lend = self._new_label()
+        Lcases = [self._new_label() for _ in cases]
+        Ldefault = self._new_label() if has_default else Lend
+
+        # saltos a cada case
+        for i, cctx in enumerate(cases):
+            cexpr = self.visit(cctx.expression())
+            if cexpr and cexpr.code: code += cexpr.code
+            tcmp = self._emit_bin("==", scrut.place, cexpr.place, code)
+            self._emit_if_goto(tcmp, Lcases[i], code)
+
+        # si no match, ir a default o fin
+        self._emit_goto(Ldefault, code)
+
+        # emitir cada case
+        for i, cctx in enumerate(cases):
+            self._emit_label(Lcases[i], code)
+            # statements del case
+            for s in cctx.statement():
+                n = self.visit(s)
+                if n and n.code: code += n.code
+            # tras un case, por defecto caemos al end (si quieres 'fallthrough', no pongas este goto)
+            self._emit_goto(Lend, code)
+
+        # default
+        if has_default:
+            self._emit_label(Ldefault, code)
+            for s in ctx.defaultCase().statement():
+                n = self.visit(s)
+                if n and n.code: code += n.code
+
+        self._emit_label(Lend, code)
+        return IRNode(code=code)
+    
     # RETURN
     def visitReturnStatement(self, ctx):
         code = []
@@ -309,9 +407,46 @@ class TacGenerator(CompiscriptVisitor):
     # ==============================================================
     
     def visitTernaryExpr(self, ctx):
-        if ctx.getChildCount() == 1:            
-            sub = self.visit(ctx.logicalOrExpr())
-            return sub
+        # conditionalExpr: logicalOrExpr ('?' expression ':' expression)?
+        if ctx.getChildCount() == 1:
+            return self.visit(ctx.logicalOrExpr())
+
+        # Hay ternario
+        cond_node = self.visit(ctx.logicalOrExpr())
+        then_node = self.visit(ctx.expression(0))
+        else_node = self.visit(ctx.expression(1))
+
+        Lthen = self._new_label()
+        Lelse = self._new_label()
+        Lend  = self._new_label()
+
+        # Usamos un temp para el "valor" del ternario (aunque tu gramática lo use como statement,
+        # así también queda correcto si alguien lo usa en una expresión).
+        result = self._new_temp()
+        code = []
+
+        # cond
+        if cond_node and cond_node.code: code += cond_node.code
+        self._emit_if_goto(cond_node.place, Lthen, code)
+        self._emit_goto(Lelse, code)
+
+        # then
+        self._emit_label(Lthen, code)
+        if then_node and then_node.code: code += then_node.code
+        # si el then_node produce un valor, lo guardamos; si no, lo dejamos como está
+        if getattr(then_node, "place", None) is not None:
+            self._emit_assign(dst=result, src=then_node.place, code=code)
+        self._emit_goto(Lend, code)
+
+        # else
+        self._emit_label(Lelse, code)
+        if else_node and else_node.code: code += else_node.code
+        if getattr(else_node, "place", None) is not None:
+            self._emit_assign(dst=result, src=else_node.place, code=code)
+
+        # end
+        self._emit_label(Lend, code)
+        return IRNode(place=result, code=code)
     
     def visitRelationalExpr(self, ctx):
         if len(ctx.additiveExpr()) == 1:
@@ -444,6 +579,69 @@ class TacGenerator(CompiscriptVisitor):
             acc_place = self._emit_bin(op, acc_place, rhs.place, code)
             idx += 1; childi += 2
         return IRNode(place=acc_place, code=code)
+    
+    # Constant Declaration
+    def visitConstantDeclaration(self, ctx):
+        """
+        const Identifier typeAnnotation? '=' expression ';'
+        """
+        name = ctx.Identifier().getText()
+        expr_node = self.visit(ctx.expression())
+        code = []
+        if expr_node and expr_node.code:
+            code += expr_node.code
+        # asignación
+        self._emit_assign(dst=name, src=expr_node.place, code=code)
+
+        # registra símbolo TAC (marcar const en metadata actual del scope)
+        meta = dict(self.const_scopes[-1]) if isinstance(self.const_scopes[-1], dict) else {"const": True}
+        if isinstance(self.const_scopes[-1], set):
+            meta = {"const": True}
+            self.const_scopes[-1].add(name)
+        self.tac_table.define(symbol_or_name=name, sym_type=None, metadata=meta)
+
+        return IRNode(code=code)
+
+    # Print Statement
+    def visitPrintStatement(self, ctx):
+        """
+        print '(' expression ')' ';'
+        """
+        val = self.visit(ctx.expression())
+        code = []
+        if val and val.code:
+            code += val.code
+        code.append(TACOP(op="print", arg1=val.place))
+        return IRNode(code=code)
+    
+    # Function Declaration
+    def visitFunctionDeclaration(self, ctx):
+        """
+        function Identifier '(' parameters? ')' (':' type)? block;
+        """
+        fname = ctx.Identifier().getText()
+        Lentry = f"func_{fname}_entry"
+        Lexit  = f"func_{fname}_exit"
+
+        # Abrir scope TAC y registrar parámetros como símbolos
+        self._enter_scope()
+        if ctx.parameters():
+            for pctx in ctx.parameters().parameter():
+                pname = pctx.Identifier().getText()
+                # en TAC basta con darlos de alta (tipo opcional)
+                self.tac_table.define(symbol_or_name=pname, sym_type=None, metadata={})
+
+        # Cuerpo
+        body = self.visit(ctx.block())
+
+        code = []
+        self._emit_label(Lentry, code)
+        if body and body.code:
+            code += body.code
+        self._emit_label(Lexit, code)
+
+        self._exit_scope()
+        return IRNode(code=code)
 
     # ==============================================================
     # ||  [3] Primary and Unary
@@ -582,12 +780,22 @@ class TacGenerator(CompiscriptVisitor):
         return IRNode(place=lhs_node.place, code=code)
     
     def visitPropertyAssignExpr(self, ctx):
-        # TODO: implementar propiedad obj.prop = ...
-        # Por ahora, para no crashear:
+        """
+        lhs '.' Identifier '=' assignmentExpr
+        Emite: setprop obj, prop, val
+        """
+        obj_node = self.visit(ctx.lhs)                # objeto a la izquierda del punto
+        prop_name = ctx.Identifier().getText()
         rhs_node = self.visit(ctx.assignmentExpr())
+
         code = []
+        if obj_node and obj_node.code: code += obj_node.code
         if rhs_node and rhs_node.code: code += rhs_node.code
-        return IRNode(place=rhs_node.place if rhs_node else None, code=code)
+
+        code.append(TACOP(op="setprop", arg1=obj_node.place, arg2=prop_name, result=rhs_node.place))
+        # Devolver el valor asignado como resultado de la expresión
+        return IRNode(place=rhs_node.place, code=code)
+
     # ==============================================================
     # ||  [5] Block Statement Flow
     # ==============================================================

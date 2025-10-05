@@ -1,99 +1,105 @@
-# 📄 Formato del Código Intermedio (TAC)
+Perfecto 💪 aquí tienes un **documento completamente nuevo y actualizado** sobre el **Formato del Código Intermedio (TAC)**, adaptado al sistema que ya implementaste —incluyendo tu esquema real de `TACOP`, temporales, etiquetas, y la semántica de flujo que estás generando (if, while, for, foreach, switch, etc.).
 
-## 🏗️ Estructura del TAC
+---
 
-Cada instrucción se representa como una **tripleta**:
+# 🧠 Formato del Código Intermedio (TAC)
+
+## 🏗️ Estructura General
+
+Cada instrucción del TAC (Three Address Code) se representa con una **cuádrupla** de la forma:
 
 ```
 (op, arg1, arg2, result)
 ```
 
-* **op** → operación u opcode (ej. `+`, `-`, `*`, `/`, `=`, `goto`, `ifgoto`, etc.)
-* **arg1** → primer operando (puede ser constante, identificador, temporal)
-* **arg2** → segundo operando (opcional)
-* **result** → variable destino (temporal o identificador final)
+Donde:
+
+| Campo      | Descripción                                                                       |
+| ---------- | --------------------------------------------------------------------------------- |
+| **op**     | Operación u opcode a ejecutar (ej. `+`, `-`, `=`, `goto`, `if-goto`, `len`, etc.) |
+| **arg1**   | Primer argumento (constante, identificador, o temporal).                          |
+| **arg2**   | Segundo argumento (si aplica, p.ej. operaciones binarias).                        |
+| **result** | Resultado destino o etiqueta (variable, temporal, o label).                       |
 
 Ejemplo:
 
 ```
-(*, a, a, t1)       ; t1 = a * a
-(=, t1, -, x)       ; x = t1
++, a, b, t0     ; t0 = a + b
+=, t0, -, x     ; x = t0
 ```
 
 ---
 
-## 🧩 Conjunto de **Opcodes Soportados**
+## ⚙️ Conjunto de **Operaciones Soportadas**
 
-### Aritméticos
+### 🔢 1. Aritméticas y Lógicas
 
-* `add` → suma (`+`)
-* `sub` → resta (`-`)
-* `mult` → multiplicación (`*`)
-* `div` → división (`/`)
-* `uminus` → negación unaria (`-x`)
-
-### Asignación y movimiento
-
-* `=` → asignación (`x = y`)
-* `move` → mover valores entre temporales (`t1 = t2`)
-
-### Comparaciones
-
-* `eq` → igual (`==`)
-* `neq` → distinto (`!=`)
-* `lt` → menor (`<`)
-* `le` → menor o igual (`<=`)
-* `gt` → mayor (`>`)
-* `ge` → mayor o igual (`>=`)
-
-### Control de flujo
-
-* `goto L` → salto incondicional
-* `ifgoto` → salto condicional (`if x goto L`)
-* `ifFalsegoto` → salto condicional negado
-
-### Funciones
-
-* `param x` → pasar parámetro
-* `call f, n` → llamada a función con `n` argumentos
-* `return x` → retornar valor
-
-### Memoria y arreglos
-
-* `load` → cargar de memoria
-* `store` → guardar en memoria
-* `[]=` → asignar en arreglo
-* `=[]` → leer de arreglo
+| Operador    | Descripción     | Ejemplo TAC                  |
+| ----------- | --------------- | ---------------------------- |
+| `+`         | Suma            | `+, a, b, t1` → `t1 = a + b` |
+| `-`         | Resta           | `-, a, b, t2` → `t2 = a - b` |
+| `*`         | Multiplicación  | `*, a, b, t3`                |
+| `/`         | División        | `/, a, b, t4`                |
+| `%`         | Módulo          | `%, a, b, t5`                |
+| `uminus`    | Negación unaria | `uminus, a, -, t6`           |
+| `!` / `not` | Negación lógica | `not, cond, -, t7`           |
 
 ---
 
-## 🔖 Temporales y Etiquetas
+### 🧩 2. Comparaciones
 
-* **Temporales (`t0, t1, t2...`)** → generados automáticamente por el compilador para resultados intermedios.
-* **Etiquetas (`L0, L1, L2...`)** → marcan puntos de salto en `if`, `while`, `for`.
+| Operador | Descripción   | Ejemplo         |           |   |   |              |
+| -------- | ------------- | --------------- | --------- | - | - | ------------ |
+| `==`     | Igual         | `==, a, b, t8`  |           |   |   |              |
+| `!=`     | Distinto      | `!=, a, b, t9`  |           |   |   |              |
+| `<`      | Menor que     | `<, a, b, t10`  |           |   |   |              |
+| `<=`     | Menor o igual | `<=, a, b, t11` |           |   |   |              |
+| `>`      | Mayor que     | `>, a, b, t12`  |           |   |   |              |
+| `>=`     | Mayor o igual | `>=, a, b, t13` |           |   |   |              |
+| `&&`     | AND lógico    | `&&, a, b, t14` |           |   |   |              |
+| `        |               | `               | OR lógico | ` |   | , a, b, t15` |
 
 ---
 
-## 📌 Ejemplo
+### 📝 3. Asignación y Movimiento
 
-Código fuente:
+| Operador  | Descripción                 | Ejemplo                                |
+| --------- | --------------------------- | -------------------------------------- |
+| `=`       | Asignación simple           | `=, b, -, a` → `a = b`                 |
+| `setprop` | Asignar propiedad de objeto | `setprop, obj, x, val` → `obj.x = val` |
+| `getidx`  | Obtener índice de arreglo   | `getidx, arr, i, t1` → `t1 = arr[i]`   |
+| `len`     | Longitud de arreglo         | `len, arr, -, t2` → `t2 = len(arr)`    |
 
-```c
-let x = 2 * 2;
-```
+---
 
-TAC:
+### 🔁 4. Control de Flujo
 
-```
-t0 = 2
-t1 = 2
-t2 = t0 * t1
-x  = t2
-```
+| Operador  | Descripción            | Ejemplo                |
+| --------- | ---------------------- | ---------------------- |
+| `label`   | Define una etiqueta    | `label, -, -, L1`      |
+| `goto`    | Salto incondicional    | `goto, L1, -, -`       |
+| `if-goto` | Salto condicional      | `if-goto, cond, L2, -` |
+| `return`  | Retorna de una función | `return, t0, -, -`     |
 
-Tripletas:
+> 💡 Las etiquetas (`L0`, `L1`, `L2`, …) se generan automáticamente por el `LabelGenerator` y marcan los puntos de salto.
 
-```
-(*, 2, 2, t2)
-(=, t2, -, x)
-```
+---
+
+### 🧮 5. Arrays y Propiedades
+
+| Operador         | Descripción               | Ejemplo                              |
+| ---------------- | ------------------------- | ------------------------------------ |
+| `getidx`         | Accede a un elemento      | `getidx, arr, i, t0` → `t0 = arr[i]` |
+| `setprop`        | Asigna propiedad a objeto | `setprop, obj, field, val`           |
+| `len`            | Obtiene longitud          | `len, arr, -, t1`                    |
+| `new` *(futuro)* | Instancia objeto/clase    | `new, Class, -, t0`                  |
+
+---
+
+### 🧠 6. Temporales y Etiquetas
+
+| Elemento                   | Descripción                                  |
+| -------------------------- | -------------------------------------------- |
+| **t0, t1, t2…**            | Temporales generados por el `TempAllocator`. |
+| **L0, L1, L2…**            | Etiquetas generadas por el `LabelGenerator`. |
+| **func_name_entry / exit** | Marcadores de entrada/salida de funciones.   |

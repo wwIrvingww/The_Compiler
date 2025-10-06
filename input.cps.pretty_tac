@@ -1,0 +1,23 @@
+t0 = 0
+tem = t0
+t1 = 0
+i = t1
+label L0
+t2 = i
+t3 = 16
+t4 = t2 < t3
+if t4 goto L1
+goto L3
+label L1
+t8 = tem
+t9 = tem
+t10 = t8 + t9
+tem = t10
+goto L2
+label L2
+t5 = i
+t6 = 1
+t7 = t5 + t6
+i = t7
+goto L0
+label L3

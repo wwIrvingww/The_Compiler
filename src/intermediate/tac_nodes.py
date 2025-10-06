@@ -88,6 +88,17 @@ class TACOP:
             if self.arg2 is not None:
                 parts.append(""+str(self.arg2))
         return " ".join(parts)
+    
+    def __post_init__(self):
+        def norm(x):
+            if isinstance(x, tuple) and x:
+                x = x[0]
+            if x is None:
+                return None
+            return str(x)
+        self.arg1   = norm(self.arg1)
+        self.arg2   = norm(self.arg2)
+        self.result = norm(self.result)
         
 @dataclass
 class IRNode:

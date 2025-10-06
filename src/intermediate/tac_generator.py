@@ -17,6 +17,7 @@ class TacGenerator(CompiscriptVisitor):
         self.const_scopes: List[set] = [set()]
         self.break_stack: List[str] = []
         self.continue_stack: List[str] = []
+        self.current_class: Optional[str] = None
 
     # ==============================================================
     # ||  [0] Aux Functions
@@ -65,6 +66,18 @@ class TacGenerator(CompiscriptVisitor):
         code.append(TACOP(op=op, arg1=a, arg2=b, result=t))
         return t
     
+    def _emit_class_begin(self, cls: str, base: Optional[str], code: list):
+        code.append(TACOP(op="class", arg1=cls, arg2=(base or "-")))
+
+    def _emit_class_attr(self, cls: str, name: str, ty_name: Optional[str], code: list):
+        code.append(TACOP(op="attr", arg1=cls, arg2=name, result=(ty_name or "-")))
+
+    def _emit_class_method(self, cls: str, mname: str, entry_label: str, code: list):
+        code.append(TACOP(op="method", arg1=cls, arg2=mname, result=entry_label))
+
+    def _emit_class_end(self, cls: str, code: list):
+        code.append(TACOP(op="endclass", arg1=cls))
+    
     def _new_temp(self):
         return self.temp_allocator.new_temp()
             
@@ -83,7 +96,10 @@ class TacGenerator(CompiscriptVisitor):
 
     def get_code(self):
         return list(self.code)
-
+    
+    def _func_labels(self, name: str):
+        fq = f"{self.current_class}.{name}" if self.current_class else name
+        return (f"func_{fq}_entry", f"func_{fq}_exit")
 
     
     # ==============================================================
@@ -106,8 +122,8 @@ class TacGenerator(CompiscriptVisitor):
             ctx.variableDeclaration() or    # ✅
             ctx.constantDeclaration() or    # ✅
             ctx.assignment() or             # ⏳ 1/2 terminado, falta asignacion de propiedades
-            ctx.functionDeclaration() or    # ✅ Not implemented yet
-            ctx.classDeclaration() or       # 🚧 Not implemented yet
+            ctx.functionDeclaration() or    # ✅ 
+            ctx.classDeclaration() or       # ✅
             ctx.expressionStatement() or    # ⏳ pending
             ctx.printStatement() or         # ✅ Not important
             ctx.block() or                  # ✅
@@ -625,8 +641,7 @@ class TacGenerator(CompiscriptVisitor):
         function Identifier '(' parameters? ')' (':' type)? block;
         """
         fname = ctx.Identifier().getText()
-        Lentry = f"func_{fname}_entry"
-        Lexit  = f"func_{fname}_exit"
+        Lentry, Lexit = self._func_labels(fname)
 
         # Abrir scope TAC y registrar parámetros como símbolos
         self._enter_scope()
@@ -641,12 +656,13 @@ class TacGenerator(CompiscriptVisitor):
 
         code = []
         self._emit_label(Lentry, code)
-        if body and body.code:
-            code += body.code
+        body_ir = self.visit(ctx.block())
+        if body_ir and body_ir.code:
+            code += body_ir.code
         self._emit_label(Lexit, code)
 
         self._exit_scope()
-        return IRNode(code=code)
+        return IRNode(place=None, code=code)
 
     # ==============================================================
     # ||  [3] Primary and Unary
@@ -854,6 +870,7 @@ class TacGenerator(CompiscriptVisitor):
         # Si hubiera sufijos (., (), []), aquí es donde luego los encadenarás.
         # Por ahora devolvemos el base (identificador simple).
         return base
+    
     def visitIdentifierExpr(self, ctx):
         """
         primaryAtom: Identifier  # IdentifierExpr
@@ -863,8 +880,74 @@ class TacGenerator(CompiscriptVisitor):
         name = ctx.Identifier().getText()
         return IRNode(place=name, code=[])
     
-    def visitFunctionDeclaration(self,ctx):
-        pass
+    def visitClassDeclaration(self,ctx):
+        """
+        class Identifier (':' Identifier)? '{' classMember* '}'
+        """
+        cls_name = ctx.Identifier(0).getText()
+        base_name = None
+        if ctx.Identifier() and len(ctx.Identifier()) > 1:
+            base_name = ctx.Identifier(1).getText()
+
+        out = []
+        self._emit_class_begin(cls_name, base_name, out)
+
+        # activar contexto de clase (para prefijar labels de métodos)
+        prev = self.current_class
+        self.current_class = cls_name
+
+        # Si la semántica ya registró la clase/miembros, podemos leerlos de la tabla:
+        class_sym = None
+        try:
+            # tu tabla semántica expone lookup_class? (si no, usa self.sem_table.lookup(cls_name) y comprueba type == "class")
+            class_sym = getattr(self.sem_table, "lookup_class", None)
+            class_sym = class_sym(cls_name) if callable(class_sym) else self.sem_table.lookup(cls_name)
+        except Exception:
+            class_sym = None
+
+        attrs_meta = {}
+        methods_meta = {}
+        if class_sym and getattr(class_sym, "type", None) == "class":
+            attrs_meta = class_sym.metadata.get("attributes", {}) or {}
+            methods_meta = class_sym.metadata.get("methods", {}) or {}
+
+        # 1) Emitir atributos como metadatos (NO ejecutamos inicializadores aquí)
+        #    Preferimos la info de la tabla semántica; si no está, caemos al parse.
+        if attrs_meta:
+            for aname, asym in attrs_meta.items():
+                ty_name = getattr(asym, "type", None)
+                self._emit_class_attr(cls_name, aname, ty_name, out)
+        else:
+            # fallback: leer nombres desde el parse si no hubo semántica
+            for m in ctx.classMember():
+                if m.variableDeclaration():
+                    vctx = m.variableDeclaration()
+                    aname = vctx.Identifier().getText()
+                    self._emit_class_attr(cls_name, aname, None, out)
+
+        # 2) Emitir mapping método → label, y generar el TAC de cada método
+        for m in ctx.classMember():
+            if m.functionDeclaration():
+                fctx = m.functionDeclaration()
+                mname = fctx.Identifier().getText()
+                Lentry, _ = self._func_labels(mname)
+
+                # relación (cls, método) -> entry label
+                self._emit_class_method(cls_name, mname, Lentry, out)
+
+                # Generar el cuerpo del método con labels calificados
+                mir = self.visitFunctionDeclaration(fctx)
+                if mir and mir.code:
+                    out += mir.code
+
+            # IMPORTANTE: NO visites variable/constant aquí, para no “ejecutar” nada de clase.
+
+        self._emit_class_end(cls_name, out)
+
+        # restaurar contexto
+        self.current_class = prev
+
+        return IRNode(place=None, code=out)
 
     def dump_runtime_info(self):
         print("\n== RUNTIME FRAMES ==")

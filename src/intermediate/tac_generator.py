@@ -121,6 +121,10 @@ class TacGenerator(CompiscriptVisitor):
         self.tac_table.exit_scope()
         self.const_scopes.pop()
 
+    def get_code(self):
+        return list(self.code)
+
+
     
     # ==============================================================
     # ||  [1] Flow control

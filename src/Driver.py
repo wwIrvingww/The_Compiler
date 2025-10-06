@@ -5,6 +5,7 @@ from parser.CompiscriptParser import CompiscriptParser
 from semantic.ast_and_semantic import AstAndSemantic
 from ast_nodes import create_tree_image, render_ascii
 from intermediate.tac_generator import TacGenerator
+from intermediate.cfg import build_cfg
 
 def main(argv):
     if len(argv) < 2:
@@ -68,6 +69,34 @@ def main(argv):
         print("\n--- TAC (versión legible) ---")
         print(program_tac.pretty(limit=20))  # muestra primeras 20 instrucciones
         print("------------------------------")
+
+        # === FASE 4: CONSTRUCCIÓN DE CFG ===
+        try:
+            cfg = build_cfg(program_tac.instructions)
+
+            print("\n== CFG ==")
+            for b in cfg.blocks:
+                print(f"BB{b.id}: [{b.start}..{b.end}] labels={b.labels} succ={b.succ} pred={b.pred}")
+
+            # (Opcional) exportar a DOT para graphviz
+            dot_path = input_path + ".cfg.dot"
+            with open(dot_path, "w", encoding="utf-8") as f:
+                f.write("digraph CFG {\n")
+                # nodos
+                for b in cfg.blocks:
+                    label = f"BB{b.id}\\n[{b.start}..{b.end}]"
+                    if b.labels:
+                        label += "\\n" + ",".join(b.labels)
+                    f.write(f'  BB{b.id} [shape=box,label="{label}"];\n')
+                # aristas
+                for b in cfg.blocks:
+                    for s in b.succ:
+                        f.write(f"  BB{b.id} -> BB{s};\n")
+                f.write("}\n")
+            print(f"[OK] CFG exportado a: {dot_path}")
+
+        except Exception as e:
+            print(f"[ERROR] Fallo en la construcción del CFG: {e}")
 
     except Exception as e:
         print(f"[ERROR] Fallo en la generación de TAC: {e}")

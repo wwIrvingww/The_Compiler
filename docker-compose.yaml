@@ -1,5 +1,7 @@
 services:
   dev:
+    ports:
+      - "8000:8000"
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,7 +12,9 @@ services:
       - .:/app
       - pip-cache:/root/.local
     working_dir: /app
-    command: /bin/bash
+    command: bash -c "chmod +x scripts/run_tac_gen.sh && python3 src/ide/tac_server.py input.cps --port 8000 --watch --autorun-cmd 'bash scripts/run_tac_gen.sh'"
+
+
   test:
     build:
       context: .
@@ -25,6 +29,7 @@ services:
     command: pytest -s ./tests
     depends_on:
       - dev
+
   prod:
     build:
       context: .

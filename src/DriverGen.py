@@ -17,6 +17,12 @@ def main(argv):
     sem_listener = AstAndSemantic()
     walker.walk(sem_listener, tree)
 
+    try:
+        path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
+        print(f"\n[OK] AST exportado a: {path}")
+    except Exception as e:
+        print(f"\n[WARN] No se pudo exportar imagen: {e}")
+
     if sem_listener.errors:
         print("== ERRORES SEMÁNTICOS ==")
         for e in sem_listener.errors: print("•", e)

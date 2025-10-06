@@ -34,6 +34,8 @@ class TACOP:
         "load", "store", "move",
         
         ## Special tags ##
+        "CREATE_ARRAY,"
+        "PUSH_ARRAY",
         "LOAD_IDX",
         "STORE_IDX",
 
@@ -66,6 +68,17 @@ class TACOP:
             parts.append(f"{self.result} =")
             parts.append(op)
             parts.append(str(self.arg1))
+        elif op in ["STORE_IDX"]:
+            parts.append(f"{self.result}")
+            parts.append("STORE_IDX")
+            parts.append(str(self.arg1)+",")
+            parts.append(str(self.arg2))
+        elif op in ["LOAD_IDX"]:
+            parts.append(f"{self.result}")
+            parts.append("LOAD_IDX")
+            parts.append(str(self.arg1)+",")
+            parts.append(str(self.arg2))    
+        
         elif op == "label":
             # imprime "label Lk"
             parts.append("label")
@@ -104,3 +117,9 @@ class IRAssign(IRNode):
 class IRBlock(IRNode):
     start_label : Any = None
     end_label : Any = None
+    
+    
+@dataclass
+class IRArray(IRNode):
+    base: Any = None
+    index : Any = None

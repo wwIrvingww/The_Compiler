@@ -1,3 +1,4 @@
+from ast_nodes import is_list
 from parser.CompiscriptVisitor import CompiscriptVisitor
 from intermediate.tac_nodes import *
 from typing import Optional, List, Dict, Any
@@ -21,6 +22,45 @@ class TacGenerator(CompiscriptVisitor):
     # ==============================================================
     # ||  [0] Aux Functions
     # ==============================================================
+    
+    ## Array emits
+    def _emit_array_idx_store(self, arr_tem :str, val: str, idx: str, code: list):
+        code.append(TACOP(
+            op="STORE_IDX",
+            arg1=idx,
+            arg2=val,
+            result=arr_tem
+        ))
+    
+    def _emit_array_idx_load(self, arr_tem :str, idx: str, code: list):
+        t = self._new_temp()
+        code.append(TACOP(
+            op="LOAD_IDX",
+            arg1=arr_tem,
+            arg2=idx,
+            result=t
+        ))
+        return t
+    
+    
+    def _emit_array_init(self, code: list):
+        t = self._new_temp()
+        code.append(
+            TACOP(
+                op="CREATE_ARRAY",
+                result=t
+            )
+        )
+        return t
+    
+    def _emit_array_push(self, arr_temp: str, val_temp: str, code: list):
+        code.append(
+            TACOP(
+                op="PUSH_TO_ARRAY",
+                result=arr_temp,
+                arg1=val_temp
+            )
+        )
     
     # hooks de TAC
     def _emit_goto(self, lab: str, code: list):
@@ -120,7 +160,11 @@ class TacGenerator(CompiscriptVisitor):
         )
         return self.visit(child)
 
-    # IF / ELSE
+    # ==============================================================
+    # ||  [2] Conditional Expressions (if-else, switch)
+    # ==============================================================
+    
+    # IF-ELSE
     def visitIfStatement(self, ctx):
         # if '(' expression ')' block ('else' block)?
         cond_node = self.visit(ctx.expression())
@@ -155,6 +199,57 @@ class TacGenerator(CompiscriptVisitor):
         self._emit_label(Lend, code)
         return IRNode(code=code)
 
+
+    # SWITCH
+    def visitSwitchStatement(self, ctx):
+        """
+        switch '(' expression ')' '{' switchCase* defaultCase? '}'
+        """
+        scrut = self.visit(ctx.expression())
+        code = []
+        if scrut and scrut.code: code += scrut.code
+
+        cases = ctx.switchCase() or []
+        has_default = ctx.defaultCase() is not None
+
+        Lend = self._new_label()
+        Lcases = [self._new_label() for _ in cases]
+        Ldefault = self._new_label() if has_default else Lend
+
+        # saltos a cada case
+        for i, cctx in enumerate(cases):
+            cexpr = self.visit(cctx.expression())
+            if cexpr and cexpr.code: code += cexpr.code
+            tcmp = self._emit_bin("==", scrut.place, cexpr.place, code)
+            self._emit_if_goto(tcmp, Lcases[i], code)
+
+        # si no match, ir a default o fin
+        self._emit_goto(Ldefault, code)
+
+        # emitir cada case
+        for i, cctx in enumerate(cases):
+            self._emit_label(Lcases[i], code)
+            # statements del case
+            for s in cctx.statement():
+                n = self.visit(s)
+                if n and n.code: code += n.code
+            # tras un case, por defecto caemos al end (si quieres 'fallthrough', no pongas este goto)
+            self._emit_goto(Lend, code)
+
+        # default
+        if has_default:
+            self._emit_label(Ldefault, code)
+            for s in ctx.defaultCase().statement():
+                n = self.visit(s)
+                if n and n.code: code += n.code
+
+        self._emit_label(Lend, code)
+        return IRNode(code=code)
+    
+    # ==============================================================
+    # ||  [3] Loops (while, dowhile, for, foreach)
+    # ==============================================================
+    
     # WHILE
     def visitWhileStatement(self, ctx):
         # while '(' expression ')' block
@@ -328,51 +423,10 @@ class TacGenerator(CompiscriptVisitor):
 
         return IRNode(code=code)
 
-    # SWITCH
-    def visitSwitchStatement(self, ctx):
-        """
-        switch '(' expression ')' '{' switchCase* defaultCase? '}'
-        """
-        scrut = self.visit(ctx.expression())
-        code = []
-        if scrut and scrut.code: code += scrut.code
-
-        cases = ctx.switchCase() or []
-        has_default = ctx.defaultCase() is not None
-
-        Lend = self._new_label()
-        Lcases = [self._new_label() for _ in cases]
-        Ldefault = self._new_label() if has_default else Lend
-
-        # saltos a cada case
-        for i, cctx in enumerate(cases):
-            cexpr = self.visit(cctx.expression())
-            if cexpr and cexpr.code: code += cexpr.code
-            tcmp = self._emit_bin("==", scrut.place, cexpr.place, code)
-            self._emit_if_goto(tcmp, Lcases[i], code)
-
-        # si no match, ir a default o fin
-        self._emit_goto(Ldefault, code)
-
-        # emitir cada case
-        for i, cctx in enumerate(cases):
-            self._emit_label(Lcases[i], code)
-            # statements del case
-            for s in cctx.statement():
-                n = self.visit(s)
-                if n and n.code: code += n.code
-            # tras un case, por defecto caemos al end (si quieres 'fallthrough', no pongas este goto)
-            self._emit_goto(Lend, code)
-
-        # default
-        if has_default:
-            self._emit_label(Ldefault, code)
-            for s in ctx.defaultCase().statement():
-                n = self.visit(s)
-                if n and n.code: code += n.code
-
-        self._emit_label(Lend, code)
-        return IRNode(code=code)
+    
+    # ==============================================================
+    # ||  [3]  Flow control (break, return, continue)
+    # ==============================================================
     
     # RETURN
     def visitReturnStatement(self, ctx):
@@ -404,7 +458,7 @@ class TacGenerator(CompiscriptVisitor):
         return IRNode(code=code)
 
     # ==============================================================
-    # ||  [2] Ternary Expressions (operaciones en general)
+    # ||  [4] Ternary Expressions (operaciones en general)
     # ==============================================================
     
     def visitTernaryExpr(self, ctx):
@@ -581,6 +635,10 @@ class TacGenerator(CompiscriptVisitor):
             idx += 1; childi += 2
         return IRNode(place=acc_place, code=code)
     
+    # ==============================================================
+    # ||  [5] Declarations
+    # ==============================================================
+
     # Constant Declaration
     def visitConstantDeclaration(self, ctx):
         """
@@ -645,7 +703,7 @@ class TacGenerator(CompiscriptVisitor):
         return IRNode(code=code)
 
     # ==============================================================
-    # ||  [3] Primary and Unary
+    # ||  [6] Primary and Unary
     # ==============================================================
     
     def visitUnaryExpr(self, ctx):
@@ -667,11 +725,8 @@ class TacGenerator(CompiscriptVisitor):
     def visitPrimaryExpr(self, ctx):
         # primaryExpr: literalExpr | leftHandSide | '(' expression ')'
         if ctx.literalExpr():
-            place = self._new_temp()
-            val = ctx.literalExpr().getText()
-            code = []
-            self._emit_assign(dst=place, src=val, code=code)
-            return IRNode(place=place, value=val, code=code)
+            sub = self.visit(ctx.literalExpr())
+            return sub
 
         if ctx.leftHandSide():
             sub = self.visit(ctx.leftHandSide())
@@ -700,7 +755,7 @@ class TacGenerator(CompiscriptVisitor):
         return inner
     
     # ==============================================================
-    # ||  [4] Variable Declaration flow
+    # ||  [7] Variable Declaration flow
     # ==============================================================
     
     def visitVariableDeclaration(self, ctx):
@@ -761,8 +816,13 @@ class TacGenerator(CompiscriptVisitor):
             # TODO property asignment
             pass
         return node
-                
+               
+
+    
     def visitLiteralExpr(self, ctx):
+        if ctx.arrayLiteral():
+            sub = self.visit(ctx.arrayLiteral())
+            return sub
         val = ctx.getText()
         place = self._new_temp()
         code = []
@@ -770,22 +830,42 @@ class TacGenerator(CompiscriptVisitor):
 
         return IRNode(place=place, code=code)
     
+    def visitExprNoAssign(self, ctx):
+        sub = self.visit(ctx.conditionalExpr())
+        return sub
+    
     def visitAssignExpr(self, ctx):
         # ctx.lhs es un leftHandSide (labeled)
         lhs_node = self.visit(ctx.lhs)                   # debe devolver algo con .place
         rhs_node = self.visit(ctx.assignmentExpr())      # valor a asignar
-
+        print("lhs",lhs_node)
+        print("rhs", rhs_node)
         code = []
-        if lhs_node and getattr(lhs_node, "code", None):
-            code += lhs_node.code
-        if rhs_node and getattr(rhs_node, "code", None):
-            code += rhs_node.code
 
+        if lhs_node:
+            code += lhs_node.code
+        if rhs_node:
+            code += rhs_node.code
+            
+        r_place = rhs_node.place
+        l_place = lhs_node.place
         # Asignación simple a variable (o a lo que retorne leftHandSide por ahora)
-        self._emit_assign(dst=lhs_node.place, src=rhs_node.place, code=code)
+        if isinstance(rhs_node, IRArray):
+            r_place = self._emit_array_idx_load(
+                arr_tem=rhs_node.base,
+                idx=rhs_node.index,
+                code=code
+            )
+        
+        if isinstance(lhs_node, IRArray):
+            l_place = lhs_node.base
+            self._emit_array_idx_store(arr_tem=lhs_node.base, idx=lhs_node.index, val=r_place, code=code)
+        else:
+            self._emit_assign(dst=lhs_node.place, src=r_place, code=code)
+        
 
         # Devuelve el 'place' del LHS como resultado de la expresión de asignación
-        return IRNode(place=lhs_node.place, code=code)
+        return IRNode(place=l_place, code=code)
     
     def visitPropertyAssignExpr(self, ctx):
         """
@@ -805,7 +885,7 @@ class TacGenerator(CompiscriptVisitor):
         return IRNode(place=rhs_node.place, code=code)
 
     # ==============================================================
-    # ||  [5] Block Statement Flow
+    # ||  [8] Block Statement Flow
     # ==============================================================
     
     def visitBlock(self, ctx):
@@ -826,14 +906,14 @@ class TacGenerator(CompiscriptVisitor):
         return IRNode(code=code)
        
     # ==============================================================
-    # ||  [6] Expression statement
+    # ||  [9] Expression statement
     # ==============================================================
     
     def visitExpressionStatement(self, ctx):
         sub = self.visit(ctx.expression())
         return sub
     # ==============================================================
-    # ||  [7] leftHandSide and primaryAtom
+    # ||  [10] leftHandSide and primaryAtom
     # ==============================================================
     def visitLeftHandSide(self, ctx):
         """
@@ -842,13 +922,27 @@ class TacGenerator(CompiscriptVisitor):
         Si hay sufijos, de momento no los transformamos (queda TODO),
         pero devolvemos al menos un IRNode válido para no crashear.
         """
+
         base = self.visit(ctx.primaryAtom())
         if base is None:
             # fallback ultra-conservador
             name = ctx.getText()
             return IRNode(place=name, code=[])
-        # Si hubiera sufijos (., (), []), aquí es donde luego los encadenarás.
-        # Por ahora devolvemos el base (identificador simple).
+        if ctx.suffixOp():
+            for sop_idx in ctx.suffixOp():
+                text = sop_idx.getText()
+                if text[0] =="[": # handling for index suffix
+                    sop = self.visit(sop_idx.expression())
+                    return IRArray(
+                        place=f"{base.place}[{sop.place}]",
+                        code=sop.code,
+                        base=base.place,
+                        index=sop.place
+                    )
+                if text[0] =="(":  # Handle for call
+                    pass
+                if text[0] ==".": # handle for attribute
+                    pass
         return base
     def visitIdentifierExpr(self, ctx):
         """
@@ -868,3 +962,35 @@ class TacGenerator(CompiscriptVisitor):
             print(f"Frame '{fid}':")
             for name, slot in frame.symbols.items():
                 print(f"   {name:10s} offset={slot.offset:3d} size={slot.size:2d} type={slot.type_name}")
+
+
+    # ==============================================================
+    # ||  [11] Array Management
+    # ==============================================================
+    
+    def visitIndexExpr(self, ctx):
+        sub = self.visit(ctx.expression())
+        return sub
+    
+    def visitArrayLiteral(self, ctx):
+        # 1. Create List
+        code = []
+        arr_tem = self._emit_array_init(code)
+        
+        arr_lit = ctx.getText()[1:-1]
+        arr_iter = arr_lit.split(",")
+        
+        # 2. Push contents
+        if len(arr_iter)!=1 and arr_iter[0]!='':
+            for i in arr_iter:
+                # Save primitive value
+                i_place = self._new_temp()
+                self._emit_assign(dst=i_place, src=i, code=code)
+                # Push to array
+                self._emit_array_push(arr_tem, i_place, code)
+                
+        # 3. Return pointer
+        return IRNode(
+            place=arr_tem,
+            code=code
+        )

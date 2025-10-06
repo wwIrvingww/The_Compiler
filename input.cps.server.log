@@ -1,0 +1,11 @@
+
+
+=== run at Mon Oct  6 09:32:36 2025 ===
+[RUN_TAC_GEN] Ejecutando DriverGen.py y redirigiendo salidas...
+line 3:17 token recognition error at: '&3'
+lhs IRNode(place='i', value=None, code=[])
+rhs IRNode(place='t7', value=None, code=[TACOP(op='=', arg1='i', arg2=None, result='t5'), TACOP(op='=', arg1='1', arg2=None, result='t6'), TACOP(op='+', arg1='t5', arg2='t6', result='t7')])
+
+== RUNTIME FRAMES ==
+[INFO] Frames JSON escrito: input.cps.frames.json
+

@@ -28,19 +28,22 @@ class TACOP:
         "goto", "if-goto", "label", # Flow
         
         # Functions
-        "call", "return" ,
+        "call", "return" , "print",
         
         # Memory
         "load", "store", "move",
         
         ## Special tags ##
-        "CREATE_ARRAY,"
+        "CREATE_ARRAY",
         "PUSH_ARRAY",
         "LOAD_IDX",
         "STORE_IDX",
 
         "LOAD_PROP",
-        "STORE_PROP"
+        "STORE_PROP",
+        "len", 
+        "getidx", 
+        "setprop"
         
         # DEFAULT
         "nop"
@@ -55,7 +58,7 @@ class TACOP:
     def __str__(self):
         parts = []
         op = self.op
-        
+        # ---------- assignments ----------
         if op=="=":
             parts.append(str(self.result))
             parts.append(op)
@@ -63,22 +66,28 @@ class TACOP:
                 parts.append(str(self.arg1))
             if self.arg2 is not None:
                 parts.append(", "+str(self.arg2))
-                
+        # ---------- unary ----------
         elif op in ["not", "uminus"]: # mejor usar 'not' (no '!')
             parts.append(f"{self.result} =")
             parts.append(op)
             parts.append(str(self.arg1))
-        elif op in ["STORE_IDX"]:
-            parts.append(f"{self.result}")
-            parts.append("STORE_IDX")
-            parts.append(str(self.arg1)+",")
-            parts.append(str(self.arg2))
-        elif op in ["LOAD_IDX"]:
-            parts.append(f"{self.result}")
-            parts.append("LOAD_IDX")
-            parts.append(str(self.arg1)+",")
-            parts.append(str(self.arg2))    
-        
+        # ---------- arrays / props ----------
+        elif op == "len":
+            return f"{self.result} = len {self.arg1}"
+        elif op == "getidx":
+            # estilo: t = arr getidx i
+            return f"{self.result} = {self.arg1} getidx {self.arg2}"
+        elif op == "setprop":
+            return f"setprop {self.arg1}, {self.arg2}, {self.result}"
+        elif op == "CREATE_ARRAY":
+            return f"{self.result} = CREATE_ARRAY"
+        elif op == "PUSH_ARRAY":
+            return f"{self.result} PUSH_ARRAY {self.arg1}"
+        elif op == "LOAD_IDX":
+            return f"{self.result} = LOAD_IDX {self.arg1}, {self.arg2}"
+        elif op == "STORE_IDX":
+            return f"STORE_IDX {self.result}, {self.arg1}, {self.arg2}"
+         # ---------- labels / jumps ----------
         elif op == "label":
             # imprime "label Lk"
             parts.append("label")
@@ -90,8 +99,12 @@ class TACOP:
         elif op == "if-goto":
             # imprime "if tX goto Lk"
             parts.append(f"if {self.arg1} goto {self.arg2}")
+        # ---------- functions ----------
         elif op == "return":
             parts.append("return" + (f" {self.arg1}" if self.arg1 is not None else ""))
+        elif op == "print":
+            return f"print {self.arg1}"
+        # ---------- binarios ----------
         else:
             # binarios: "tZ = a OP b"
             parts.append(f"{self.result} =")

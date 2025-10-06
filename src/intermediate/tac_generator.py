@@ -145,7 +145,112 @@ class TacGenerator(CompiscriptVisitor):
         # STORE_PROP: arg1 = objeto, arg2 = nombre_prop, result = valor
         code.append(TACOP(op="STORE_PROP", arg1=obj_place, arg2=prop_name, result=src_place))
 
-    
+    @staticmethod
+    def peephole(code: List[TACOP]) -> List[TACOP]:
+        """
+        Reglas seguras (order-independent) pensadas para MIPS:
+          1) Eliminar asignaciones no-op:  x = x
+          2a) Simplificar if-goto con constantes literales:
+              - if true goto L  -> goto L
+              - if false goto L -> nop
+          2b) Simplificar patrón inmediato de temp booleano:
+              - t = true;  if t goto L  -> goto L
+              - t = false; if t goto L  -> nop
+              (sin instrucciones entre ambas)
+          3) Eliminar 'goto' hacia la etiqueta inmediata siguiente:
+              - goto L; label L -> elimina el goto
+          4) (Opcional) Fusionar labels consecutivos (conservador, sin renombrar)
+        """
+        out: List[TACOP] = []
+
+        # ---- pass 1: x=x y if-goto(literal) ----
+        for ins in code:
+            op = ins.op
+            # 1) x = x
+            if op == "=" and ins.result is not None and ins.arg1 is not None:
+                if ins.result == ins.arg1:
+                    # no-op
+                    continue
+
+            # 2a) if-goto con literal
+            if op == "if-goto" and ins.arg1 is not None:
+                cond = ins.arg1.strip()
+                if cond in ("true", "True"):
+                    out.append(TACOP(op="goto", arg1=ins.arg2))
+                    continue
+                if cond in ("false", "False"):
+                    # nop
+                    continue
+
+            out.append(ins)
+
+        code = out
+        out = []
+
+        # ---- pass 2: patrón t=bool; if t goto L (inmediato) ----
+        i = 0
+        while i < len(code):
+            cur = code[i]
+            if (cur.op == "=" and cur.result and cur.arg1 in ("true", "True", "false", "False")
+                and i + 1 < len(code) and code[i+1].op == "if-goto"
+                and code[i+1].arg1 == cur.result):
+                # Simplificar par
+                if cur.arg1.lower() == "true":
+                    out.append(TACOP(op="goto", arg1=code[i+1].arg2))
+                # si es false, no se añade nada (nop)
+                i += 2
+                continue
+
+            out.append(cur)
+            i += 1
+
+        code = out
+        out = []
+
+        # ---- pass 3: elimina 'goto' hacia label inmediata ----
+        i = 0
+        while i < len(code):
+            cur = code[i]
+            if cur.op == "goto" and i + 1 < len(code) and code[i+1].op == "label":
+                tgt = cur.arg1 or cur.result
+                nxt_lab = code[i+1].result or code[i+1].arg1
+                if tgt == nxt_lab:
+                    # saltamos el goto, dejamos el label
+                    out.append(code[i+1])
+                    i += 2
+                    continue
+            out.append(cur)
+            i += 1
+
+        # ---- pass 4: borrar instrucciones inalcanzables tras un goto hasta el próximo label ----
+        out = []
+        i = 0
+        while i < len(code):
+            ins = code[i]
+            out.append(ins)
+            if ins.op == "goto":
+                # saltar todo hasta el próximo label
+                j = i + 1
+                while j < len(code) and code[j].op != "label":
+                    j += 1
+                i = j
+                continue
+            i += 1
+
+        code = out
+        out = []
+
+        # ---- pass 5: labels consecutivos (conservador) ----
+        prev_was_label = False
+        for ins in code:
+            if ins.op == "label" and prev_was_label:
+                # conservamos ambos (no renombramos ni reescribimos saltos)
+                pass
+            prev_was_label = (ins.op == "label")
+            out.append(ins)
+
+        return out
+
     # ==============================================================
     # ||  [1] Flow control
     # ==============================================================
@@ -156,7 +261,8 @@ class TacGenerator(CompiscriptVisitor):
             tem_node = self.visit(st)
             if tem_node:
                 code = code + tem_node.code
-
+        
+        code = self.peephole(code)
         self.code = code
         self.dump_runtime_info()
         return IRNode(code=code)
@@ -714,7 +820,7 @@ class TacGenerator(CompiscriptVisitor):
                 self.tac_table.define(symbol_or_name=pname, sym_type=None, metadata={})
 
         # Cuerpo
-        body = self.visit(ctx.block())
+        # body = self.visit(ctx.block())
 
         code = []
         self._emit_label(Lentry, code)

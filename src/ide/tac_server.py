@@ -79,7 +79,11 @@ class TACRequestHandler(SimpleHTTPRequestHandler):
         parsed =urllib.parse.urlparse(self.path)
         if parsed.path=="/code/save":
             return self.handle_code_save()
-        return super().do_POST()
+        else:
+            # Return a 405 Method Not Allowed for unsupported POSTs
+            self.send_response(405)
+            self.end_headers()
+            self.wfile.write(b"POST not supported for this path.")
     
     def handle_sse(self):
         # registers a new SSE client and streams events until disconnect
@@ -149,33 +153,6 @@ class TACRequestHandler(SimpleHTTPRequestHandler):
         # Compact logging to stdout
         print("[http] " + format % args)
 
-
-def run_server(port: int, input_path: str, watch: bool, autorun_cmd: str):
-    base = input_path
-    pretty = base + ".pretty_tac"
-    raw = base + ".raw_tac"
-    logf = base + ".server.log"
-
-    # ensure static dir exists
-    os.makedirs(STATIC_DIR, exist_ok=True)
-
-    # limpiar logs y pretty al iniciar (evita residuos de ejecuciones previas)
-    open(logf, "w", encoding="utf-8").close()
-    # si quieres también limpiar pretty: uncomment:
-    open(pretty, "w", encoding="utf-8").close()
-
-    server = ThreadedHTTPServer(("", port), TACRequestHandler, base, pretty, raw, logf)
-    print(f"[INFO] Servidor TAC corriendo en http://0.0.0.0:{port} (archivo: {input_path})")
-    if watch:
-        print("[INFO] Modo watch activo: detectando cambios y (re)generando TAC automáticamente.")
-        watcher = FileWatcher(input_path, autorun_cmd, logf, server)
-        watcher_thread = threading.Thread(target=watcher.run, daemon=True)
-        watcher_thread.start()
-
-    try:
-        server.serve_forever()
-    except KeyboardInterrupt:
-        print("\n[INFO] Servidor detenido por keyboard interrupt.")
 
 
 class FileWatcher:
@@ -253,12 +230,40 @@ class FileWatcher:
                 time.sleep(self.poll_interval)
 
 
+
+## Main server running
+def run_server(port: int, input_path: str, watch: bool, autorun_cmd: str):
+    base = input_path
+    pretty = f"{base}.pretty_tac"
+    raw = f"{base}.raw_tac"
+    logf = f"{base}.server.log"
+
+    # ensure static dir exists
+    os.makedirs(STATIC_DIR, exist_ok=True)
+
+    # limpiar logs y pretty al iniciar (evita residuos de ejecuciones previas)
+    open(logf, "w", encoding="utf-8").close()
+    open(pretty, "w", encoding="utf-8").close()
+    open(raw, "w", encoding="utf-8").close()
+    server = ThreadedHTTPServer(("", port), TACRequestHandler, base, pretty, raw, logf)
+    print(f"[INFO] Servidor TAC corriendo en http://0.0.0.0:{port} (archivo: {input_path})")
+    if watch:
+        print("[INFO] Modo watch activo: detectando cambios y (re)generando TAC automáticamente.")
+        watcher = FileWatcher(input_path, autorun_cmd, logf, server)
+        watcher_thread = threading.Thread(target=watcher.run, daemon=True)
+        watcher_thread.start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\n[INFO] Servidor detenido por keyboard interrupt.")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("input", help="Archivo fuente .cps (ej: input.cps)")
     parser.add_argument("--port", "-p", type=int, default=8000, help="Puerto HTTP")
     parser.add_argument("--watch", action="store_true", help="Regenerar TAC al detectar cambios en el archivo")
-    parser.add_argument("--autorun-cmd", default="./scripts/run_tac_gen.sh", help="Comando que genera TAC (ej: scripts/run_tac_gen.sh)")
+    parser.add_argument("--autorun-cmd", default="./scripts/run_server_driver.sh", help="Comando que genera TAC (ej: scripts/run_tac_gen.sh)")
     args = parser.parse_args()
     run_server(args.port, args.input, args.watch, args.autorun_cmd)
 

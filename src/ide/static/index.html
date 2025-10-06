@@ -61,7 +61,6 @@
   <div id="app" role="application" aria-label="Compiscript IDE">
     <div class="toolbar" role="toolbar" aria-label="Acciones">
       <button class="btn" id="btn-load">Abrir (reload)</button>
-      <button class="btn" id="btn-save">Guardar</button>
       <button class="btn primary" id="btn-compile">Generar TAC</button>
       <div class="spacer"></div>
       <div class="status" id="status">Listo</div>
@@ -167,21 +166,30 @@ document.querySelectorAll('[data-view]').forEach(btn=>{
 async function fetchAndUpdate(){
   try{
     // TAC legible
-    console.log("whaaat")
+    console.log("pretty...")
     const p = await fetch('/tac');
     if(p.ok){
       document.getElementById('pretty-content').textContent = await p.text();
+      console.log("Got pretty: ", document.getElementById('pretty-content').textContent)
       document.getElementById('pretty-time').textContent = new Date().toLocaleTimeString();
     } else {
+      console.log("couldnt get pretty :(")
       document.getElementById('pretty-content').textContent = 'TAC no disponible (404)';
     }
 
     // TAC raw
+    console.log("raw...")
     const r = await fetch('/raw');
-    if(r.ok) document.getElementById('raw-content').textContent = await r.text();
-    else document.getElementById('raw-content').textContent = 'TAC raw no disponible';
+    if(r.ok) {
+      document.getElementById('raw-content').textContent = await r.text();
+      console.log("Got raw: ", document.getElementById('raw-content').textContent)
+    } else {
+      document.getElementById('raw-content').textContent = 'TAC raw no disponible';
+      console.log("couldnt get raw :(")
+    }
 
     // logs
+    console.log("logs...")
     const l = await fetch('/logs');
     if(l.ok) document.getElementById('logs-content').textContent = await l.text();
     else document.getElementById('logs-content').textContent = 'Logs no disponibles';
@@ -320,34 +328,34 @@ async function saveEditor(){
 // Compilar: intenta /api/compile ; si no existe sólo muestra mensaje
 async function compileTAC(){
   setStatus('Compilando...');
-  try {
-    const r = await fetch('/tac', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({filename: currentFilename})
-    });
-    if(r.ok){
-      setStatus('Compilado');
-      fetchAndUpdate();
-      return;
-    } else {
-      // si hay respuesta con texto, mostramos parte
-      const txt = await r.text().catch(()=>'');
-      setStatus('Error: ' + (txt.substring(0,60) || 'compile failed'));
-      return;
-    }
-  } catch(e){
-    // endpoint no disponible en backend mínimo: avisamos y forzamos fetchAndUpdate
-    setStatus('Compile no soportado por el servidor');
-    fetchAndUpdate();
-  }
+//  try {
+//    const r = await fetch('/compile', {
+//      method: 'POST',
+//      headers: {'Content-Type':'application/json'},
+//      body: JSON.stringify({filename: currentFilename})
+//    });
+//    if(r.ok){
+//      setStatus('Compilado');
+//      fetchAndUpdate();
+//      return;
+//    } else {
+//      // si hay respuesta con texto, mostramos parte
+//      const txt = await r.text().catch(()=>'');
+//      setStatus('Error: ' + (txt.substring(0,60) || 'compile failed'));
+//      return;
+//    }
+//  } catch(e){
+//    // endpoint no disponible en backend mínimo: avisamos y forzamos fetchAndUpdate
+//    setStatus('Compile no soportado por el servidor');
+ //   fetchAndUpdate();
+ // }
+  fetchAndUpdate();
 }
 
 /* ========================
    Bind botones y shortcuts
    ======================== */
-document.getElementById('btn-save').addEventListener('click', saveEditor);
-document.getElementById('btn-compile').addEventListener('click', compileTAC);
+document.getElementById('btn-compile').addEventListener('click', saveEditor);
 document.getElementById('btn-load').addEventListener('click', ()=>{ loadEditorFile(); fetchAndUpdate(); });
 
 window.addEventListener('keydown', (e)=>{

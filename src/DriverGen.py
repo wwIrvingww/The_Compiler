@@ -17,8 +17,11 @@ def main(argv):
         print("Uso: python src/DriverGen.py <archivo.cps>")
         return 1
 
+    
     input_path = argv[1]
-    print(f"[INFO] Analizando archivo: {input_path}\n")
+    pretty_path = f"{input_path}.pretty_tac"
+    raw_path = f"{input_path}.raw_tac"
+    # print(f"[INFO] Analizando archivo: {input_path}\n")
 
     input_stream = FileStream(input_path, encoding='utf-8')
     lexer = CompiscriptLexer(input_stream)
@@ -33,7 +36,7 @@ def main(argv):
 
     try:
         path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
-        print(f"\n[OK] AST exportado a: {path}")
+        # print(f"\n[OK] AST exportado a: {path}")
     except Exception as e:
         print(f"\n[WARN] No se pudo exportar imagen: {e}")
 
@@ -41,22 +44,24 @@ def main(argv):
         print("== ERRORES SEMÁNTICOS ==")
         for e in sem_listener.errors:
             print("•", e)
+        return 1
 
-    print("\n== AST ==")
-    try:
-        print(render_ascii(sem_listener.program))
-    except Exception:
-        print("[WARN] No se puede imprimir AST (render_ascii falló).")
+    # print("\n== AST ==")
+    # try:
+    #     print(render_ascii(sem_listener.program))
+        
+    # except Exception:
+    #     print("[WARN] No se puede imprimir AST (render_ascii falló).")
 
     # Genera imagen (ast.png por defecto) o DOT de fallback
-    try:
-        path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
-        print(f"\n[OK] AST exportado a: {path}")
-    except Exception as e:
-        print(f"\n[WARN] No se pudo exportar imagen: {e}\nSe generó ast.dot (puedes correr `dot -Tpng ast.dot -o ast.png`).")
+    # try:
+    #     path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
+    #     print(f"\n[OK] AST exportado a: {path}")
+    # except Exception as e:
+    #     print(f"\n[WARN] No se pudo exportar imagen: {e}\nSe generó ast.dot (puedes correr `dot -Tpng ast.dot -o ast.png`).")
 
     # 2) Generación de TAC (visitor)
-    print("\n== GENERANDO TAC ==")
+    # print("\n== GENERANDO TAC ==")
     try:
         tac_gen = TacGenerator(sem_listener.table)
         # Recorrido del AST (visitor); genera tac y, si corresponde, frames via FrameManager
@@ -77,7 +82,8 @@ def main(argv):
             for er in errors:
                 print("•", er)
         else:
-            print("\n[OK] Runtime layout: validación pasada (no se detectaron inconsistencias).")
+            pass
+            # print("\n[OK] Runtime layout: validación pasada (no se detectaron inconsistencias).")
         # Además volcamos JSON con la estructura de frames (útil para el IDE)
         frames_json = dump_runtime_info_json(tac_gen.frame_manager)
         out_json = f"{input_path}.frames.json"
@@ -90,13 +96,26 @@ def main(argv):
     # 4) Emitir TAC en consola (opcional: tac_gen ya pudo haber impreso o escrito archivos)
     try:
         # tac_gen.code (lista de ops) o tac_gen.emit_pretty() según implementacion
-        if hasattr(tac_gen, "emit_pretty"):
-            print("\n== TAC (pretty) ==")
-            print(tac_gen.emit_pretty())
-        elif hasattr(tac_gen, "code"):
-            print("\n== TAC (raw list) ==")
-            for line in getattr(tac_gen, "code", []):
-                print(line)
+        pretty_tac = "\n".join(str(taco) for taco in tac_gen.code)
+        with open(pretty_path, "w") as pp:
+            pp.write(pretty_tac)
+        
+        raw_tac = "\n".join(f"{taco.result},{taco.op},{taco.arg1},{taco.arg2}" for taco in tac_gen.code)
+        with open(raw_path, "w") as rp:
+            rp.write(raw_tac)
+        
+        
+        # if hasattr(tac_gen, "emit_pretty"):
+        #     # print("\n== TAC (pretty) ==")
+        #     pretty_tac = "\n".join(str(taco) for taco in tac_gen.code)
+        #     for line in getattr(tac_gen, "code", []):
+        #         print(line)
+            
+        #     with open(pretty_tac)
+        #     print(tac_gen.emit_pretty())
+        # elif hasattr(tac_gen, "code"):
+        #     raw_tac = "\n".join(f"{taco.result},{taco.op},{taco.arg1},{taco.arg2}" for taco in tac_gen.code)
+
     except Exception:
         pass
 

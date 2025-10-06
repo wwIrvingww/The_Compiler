@@ -26,11 +26,12 @@ STATIC_DIR = os.path.join(HERE, "static")
 
 class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
     daemon_threads = True
-    def __init__(self, server_address, RequestHandlerClass, pretty_path, raw_path, log_path):
+    def __init__(self, server_address, RequestHandlerClass, base, pretty_path, raw_path, log_path):
         super().__init__(server_address, RequestHandlerClass)
         self.pretty_path = pretty_path
         self.raw_path = raw_path
         self.log_path = log_path
+        self.input_path = base
         self.sse_clients = []          # list of queues (one per client)
         self.sse_lock = threading.Lock()
 
@@ -70,8 +71,16 @@ class TACRequestHandler(SimpleHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         if parsed.path == "/events":
             return self.handle_sse()
+        if parsed.path == "/code/load":
+            return self.handle_code_load()
         return super().do_GET()
 
+    def do_POST(self):
+        parsed =urllib.parse.urlparse(self.path)
+        if parsed.path=="/code/save":
+            return self.handle_code_save()
+        return super().do_POST()
+    
     def handle_sse(self):
         # registers a new SSE client and streams events until disconnect
         self.send_response(HTTPStatus.OK)
@@ -112,6 +121,30 @@ class TACRequestHandler(SimpleHTTPRequestHandler):
                 except ValueError:
                     pass
 
+    def handle_code_load(self):
+        try:
+            with open(self.server.input_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(content.encode("utf-8"))))
+            self.end_headers()
+            self.wfile.write(content.encode("utf-8"))
+        except Exception as e:
+            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))
+
+    def handle_code_save(self):
+        try:
+            length = int(self.headers.get("Content-Length",0))
+            data = self.rfile.read(length).decode("utf-8")
+            filepath = self.server.input_path
+            with open(filepath, "w", encoding="utf-8") as f:
+                f.write(data)
+            self.send_response(HTTPStatus.OK)
+            self.end_headers()
+        except Exception as e:
+            self.send_error(HTTPStatus.INTERNAL_SERVER_ERROR, str(e))    
+        
     def log_message(self, format, *args):
         # Compact logging to stdout
         print("[http] " + format % args)
@@ -131,9 +164,8 @@ def run_server(port: int, input_path: str, watch: bool, autorun_cmd: str):
     # si quieres también limpiar pretty: uncomment:
     open(pretty, "w", encoding="utf-8").close()
 
-    server = ThreadedHTTPServer(("", port), TACRequestHandler, pretty, raw, logf)
+    server = ThreadedHTTPServer(("", port), TACRequestHandler, base, pretty, raw, logf)
     print(f"[INFO] Servidor TAC corriendo en http://0.0.0.0:{port} (archivo: {input_path})")
-
     if watch:
         print("[INFO] Modo watch activo: detectando cambios y (re)generando TAC automáticamente.")
         watcher = FileWatcher(input_path, autorun_cmd, logf, server)
@@ -161,9 +193,11 @@ class FileWatcher:
         self.last_mtime = 0
 
     def _run_autorun(self):
+        
         # append a header in the log to separate runs
         hdr = f"\n\n=== run at {time.ctime()} ===\n"
         with open(self.log_path, "a", encoding="utf-8") as L:
+            
             L.write(hdr)
         try:
             # run command; capture stdout and stderr

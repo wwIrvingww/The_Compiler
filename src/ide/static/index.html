@@ -61,8 +61,8 @@
   <div id="app" role="application" aria-label="Compiscript IDE">
     <div class="toolbar" role="toolbar" aria-label="Acciones">
       <button class="btn" id="btn-load">Abrir (reload)</button>
-      <button class="btn primary" id="btn-compile">Generar TAC</button>
       <button class="btn" id="btn-save">Guardar</button>
+      <button class="btn primary" id="btn-compile">Generar TAC</button>
       <div class="spacer"></div>
       <div class="status" id="status">Listo</div>
       <div style="width:12px"></div>
@@ -110,11 +110,17 @@
     </div>
   </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js"></script>
+
 <script>
 /* ========================
    Configuración Monaco
    ======================== */
-require.config({ paths: { 'vs': 'https://unpkg.com/monaco-editor@0.45.1/min/vs' }});
+   require.config({ 
+  paths: {
+     'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.53.0/min/vs' 
+    }
+  });
 let editor = null;
 let currentFilename = 'input.cps';
 let lastSaved = null;
@@ -161,6 +167,7 @@ document.querySelectorAll('[data-view]').forEach(btn=>{
 async function fetchAndUpdate(){
   try{
     // TAC legible
+    console.log("whaaat")
     const p = await fetch('/tac');
     if(p.ok){
       document.getElementById('pretty-content').textContent = await p.text();
@@ -180,15 +187,15 @@ async function fetchAndUpdate(){
     else document.getElementById('logs-content').textContent = 'Logs no disponibles';
 
     // runtime (opcional; si hay endpoint personalizado)
-    const rt = await fetch('/runtime').catch(()=>null);
-    if(rt && rt.ok){
-      const j = await rt.json();
-      document.getElementById('runtime-content').textContent = JSON.stringify(j, null, 2);
-    } else if (!rt) {
-      // si no hay endpoint runtime, dejamos el mensaje por defecto
-    } else {
-      document.getElementById('runtime-content').textContent = 'Runtime no disponible';
-    }
+    //const rt = await fetch('/runtime').catch(()=>null);
+    //if(rt && rt.ok){
+    //  const j = await rt.json();
+    //  document.getElementById('runtime-content').textContent = JSON.stringify(j, null, 2);
+    //} else if (!rt) {
+    //  // si no hay endpoint runtime, dejamos el mensaje por defecto
+    //} else {
+    //  document.getElementById('runtime-content').textContent = 'Runtime no disponible';
+    //}
   } catch(e){
     console.warn("Error fetching dynamic content", e);
   }
@@ -228,26 +235,41 @@ setInterval(fetchAndUpdate, 3000); // poll cada 3s como fallback
 // intenta cargar desde /api/editor/load?file=... ; si falla intenta /input.cps u otros fallbacks
 async function loadEditorFile(){
   setEditorInfo("Cargando...");
-  const tries = [
-    '/api/editor/load?file=' + encodeURIComponent(currentFilename),
-    '/input.cps',
-    '/static/input.cps',
-    '/' + currentFilename
-  ];
-  for(const url of tries){
-    try {
-      const resp = await fetch(url);
-      if(resp.ok){
-        const txt = await resp.text();
-        editor.setValue(txt);
-        lastSaved = txt;
-        setEditorInfo("Cargado (" + url + ")");
-        return;
-      }
-    } catch(e){
-      // ignore and continue
+  try{
+    const response = await fetch("code/load");
+    if (response.ok) {
+      const content = await response.text();
+      editor.setValue(content);
+      lastSaved = content;
+      setEditorInfo("Archivo cargado desde servidor")
+      return;
+    } else{
+      console.warn("No se pudo cargar /code/load, status:", response.status);
     }
+  } catch (e){
+    console.error("Error cargando archivo desde el servidor: ", e)
   }
+
+  //const tries = [
+  //  '/api/editor/load?file=' + encodeURIComponent(currentFilename),
+  //  '/input.cps',
+  //  '/static/input.cps',
+  //  '/' + currentFilename
+  //];
+  //for(const url of tries){
+  //  try {
+  //    const resp = await fetch(url);
+  //    if(resp.ok){
+  //      const txt = await resp.text();
+  //      editor.setValue(txt);
+  //      lastSaved = txt;
+  //      setEditorInfo("Cargado (" + url + ")");
+  //      return;
+  //   }
+  //  } catch(e){
+   //   // ignore and continue
+    //}
+  
   // si llegamos aquí, no hay endpoint; cargamos ejemplo
   const sample = `// Nuevo archivo ${currentFilename}\n// Escribe tu código Compiscript aquí\n\nfunc main() {\n  // ejemplo\n}\n`;
   editor.setValue(sample);
@@ -259,12 +281,13 @@ async function loadEditorFile(){
 async function saveEditor(){
   const content = editor.getValue();
   setStatus('Guardando...');
+  console.log("hee hee");
   // primer intento: endpoint oficial
   try {
-    const r = await fetch('/api/save', {
+    const r = await fetch('/code/save', {
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({filename: currentFilename, content})
+      headers: {'Content-Type':'text/plain'},
+      body: content
     });
     if(r.ok){
       lastSaved = content;
@@ -275,30 +298,30 @@ async function saveEditor(){
   } catch(e){ /* endpoint inexistente */ }
 
   // fallback: descarga del archivo localmente
-  try {
-    const blob = new Blob([content], {type: 'text/plain;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = currentFilename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    setEditorInfo('Guardado local (descarga)');
-    setStatus('Guardado (descarga)');
-    lastSaved = content;
-  } catch(e){
-    setEditorInfo('Error al guardar');
-    setStatus('Error');
-  }
+  // try {
+   // const blob = new Blob([content], {type: 'text/plain;charset=utf-8'});
+  //  const url = URL.createObjectURL(blob);
+  //  const a = document.createElement('a');
+  //  a.href = url;
+  //  a.download = currentFilename;
+  //  document.body.appendChild(a);
+  //  a.click();
+  //  a.remove();
+  //  URL.revokeObjectURL(url);
+  //  setEditorInfo('Guardado local (descarga)');
+  //  setStatus('Guardado (descarga)');
+  //  lastSaved = content;
+  //} catch(e){
+  //  setEditorInfo('Error al guardar');
+  //  setStatus('Error');
+ // }
 }
 
 // Compilar: intenta /api/compile ; si no existe sólo muestra mensaje
 async function compileTAC(){
   setStatus('Compilando...');
   try {
-    const r = await fetch('/api/compile', {
+    const r = await fetch('/tac', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify({filename: currentFilename})

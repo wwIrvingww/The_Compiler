@@ -5,9 +5,11 @@ async function updatePanels() {
   try {
     const tacResp = await fetch("/tac");
     tacPretty.textContent = await tacResp.text();
+    console.log(tacPretty.textContent);
 
     const logResp = await fetch("/logs");
     logs.textContent = await logResp.text();
+    console.log(logResp.textContent);
   } catch (err) {
     console.error("Error actualizando paneles:", err);
   }

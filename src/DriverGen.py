@@ -34,11 +34,11 @@ def main(argv):
     sem_listener = AstAndSemantic()
     walker.walk(sem_listener, tree)
 
-    try:
-        path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
-        # print(f"\n[OK] AST exportado a: {path}")
-    except Exception as e:
-        print(f"\n[WARN] No se pudo exportar imagen: {e}")
+    # try:
+    #     path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
+    #     print(f"\n[OK] AST exportado a: {path}")
+    # except Exception as e:
+    #     print(f"\n[WARN] No se pudo exportar imagen: {e}")
 
     if sem_listener.errors:
         print("== ERRORES SEMÁNTICOS ==")
@@ -94,6 +94,9 @@ def main(argv):
         print(f"[WARN] No se pudo validar layout runtime: {e}")
 
     # 4) Emitir TAC en consola (opcional: tac_gen ya pudo haber impreso o escrito archivos)
+    pretty_tac = "\n".join(str(taco) for taco in tac_gen.code)
+    print(pretty_tac)
+    
     try:
         # tac_gen.code (lista de ops) o tac_gen.emit_pretty() según implementacion
         pretty_tac = "\n".join(str(taco) for taco in tac_gen.code)

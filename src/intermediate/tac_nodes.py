@@ -51,6 +51,7 @@ class TACOP:
     arg1 : Optional[str] = None
     arg2 : Optional[str] = None
     result :Optional[str] = None 
+    comment : Optional[str] = None
 
 
     ## Esta funcion es solo para imprimir el tac bonito. 
@@ -72,6 +73,11 @@ class TACOP:
             parts.append(op)
             parts.append(str(self.arg1))
         # ---------- arrays / props ----------
+        elif op=="store":
+            parts = [f"*{self.result}", "store", str(self.arg1)]
+        elif op == "load":
+            parts = [str(self.result), "load", f"*{self.arg1}"]
+        
         elif op == "len":
             return f"{self.result} = len {self.arg1}"
         elif op == "getidx":
@@ -80,7 +86,7 @@ class TACOP:
         elif op == "setprop":
             return f"setprop {self.arg1}, {self.arg2}, {self.result}"
         elif op == "CREATE_ARRAY":
-            return f"{self.result} = CREATE_ARRAY"
+            return f"CREATE_ARRAY {self.result}"
         elif op == "PUSH_ARRAY":
             return f"{self.result} PUSH_ARRAY {self.arg1}"
         elif op == "LOAD_IDX":
@@ -113,6 +119,9 @@ class TACOP:
             parts.append(op)
             if self.arg2 is not None:
                 parts.append(""+str(self.arg2))
+        
+        if self.comment:
+            parts.append(f"\t# {self.comment}")
         return " ".join(parts)
     
     def __post_init__(self):
@@ -147,3 +156,4 @@ class IRBlock(IRNode):
 class IRArray(IRNode):
     base: Any = None
     index : Any = None
+    elem_size: int = None

@@ -23,6 +23,72 @@ class TacGenerator(CompiscriptVisitor):
     # ==============================================================
     # ||  [0] Aux Functions
     # ==============================================================
+    def _detect_type(self, txt: str):
+        text = txt.strip()
+        if text.lower() in ("true", "false"):
+            return ("boolean", 1)
+        try:
+            float(text)
+            return ("numeric", 4)
+        except ValueError:
+            pass
+        
+        if text.startswith('[') and text.endswith(']'):
+            return ("array", 4)
+        if (text.startswith('"') and text.endswith('"')) or (text.startswith("'") and text.endswith("'")):
+            return ("string", 4)
+        
+        return ("numeric", 4)
+        
+    def _emit_array_offset_store(
+            self,
+            arr_tem: str, 
+            src: str,
+            offset: int, 
+            index : str, 
+            code: list,
+        ):
+        effective_address = None
+        comment = None
+        if index == 0:
+            effective_address = arr_tem
+            comment = f"len({arr_tem}) = {src}"
+        else:
+            offset_bytes = self._emit_bin(op_tok="*",a=index, b=offset, code=code)
+            effective_address = self._emit_bin(op_tok="+", a=arr_tem, b=offset_bytes, code=code)
+            comment = f"{arr_tem}[{index}] = {src}"
+        code.append(
+            TACOP(
+                op="store",
+                result=effective_address,
+                arg1=src,
+                comment=comment
+            )
+        )
+        
+    def _emit_array_offset_load(
+        self,
+        arr_tem: str, 
+        offset: int, 
+        index : str, 
+        is_len: bool,
+        code: list,
+        ):
+        t0 = index
+        if not is_len:
+            t0 = self._emit_bin(op_tok="+",a=index, b=1, code=code)
+        offset_bytes = self._emit_bin(op_tok="*",a=t0, b=offset, code=code)
+        effective_address = self._emit_bin(op_tok="+", a=arr_tem, b=offset_bytes, code=code)
+        t = self._new_temp()
+        code.append(
+            TACOP(
+                op="load",
+                arg1=effective_address,
+                result=t
+            )
+        )
+        return t
+        
     
     ## Array emits
     def _emit_array_idx_store(self, arr_tem :str, val: str, idx: str, code: list):
@@ -43,16 +109,25 @@ class TacGenerator(CompiscriptVisitor):
         ))
         return t
     
-    
-    def _emit_array_init(self, code: list):
-        t = self._new_temp()
-        code.append(
-            TACOP(
-                op="CREATE_ARRAY",
-                result=t
+    def _emit_create_array(self, id :str, code):
+        if id:
+            code.append(
+                TACOP(
+                    op="CREATE_ARRAY",
+                    result=id
+                )
             )
-        )
-        return t
+            return None
+        else:
+            t = self._new_temp()
+            code.append(
+                TACOP(
+                    op="CREATE_ARRAY",
+                    result=t
+                )
+            )
+            return t
+
     
     def _emit_array_push(self, arr_temp: str, val_temp: str, code: list):
         code.append(
@@ -891,15 +966,23 @@ class TacGenerator(CompiscriptVisitor):
     def visitVariableDeclaration(self, ctx):
         id = ctx.Identifier().getText()
         init = ctx.initializer()
+        code = []
         node = None
         ty = None
         sem_info = self.sem_table.lookup(id)
         if sem_info:
             ty = sem_info.type
+            if is_list(ty) and not init:
+                self._emit_create_array(id=id, code=code)
+                node = IRAssign(
+                    place=id,
+                    name=id,
+                    code = code
+                )
         
         if init:
             expr_rslt = self.visit(init.expression())
-            code = expr_rslt.code
+            code += expr_rslt.code
             
             self._emit_assign(dst=id, src=expr_rslt.place, code=code)
   
@@ -993,10 +1076,8 @@ class TacGenerator(CompiscriptVisitor):
     
     def visitAssignExpr(self, ctx):
         # ctx.lhs es un leftHandSide (labeled)
-        lhs_node = self.visit(ctx.lhs)                   # debe devolver algo con .place
+        lhs_node = self.visitLeftHandSide(ctx.lhs, mode="store")                   # debe devolver algo con .place
         rhs_node = self.visit(ctx.assignmentExpr())      # valor a asignar
-        print("lhs",lhs_node)
-        print("rhs", rhs_node)
         code = []
 
         if lhs_node:
@@ -1007,16 +1088,16 @@ class TacGenerator(CompiscriptVisitor):
         r_place = rhs_node.place
         l_place = lhs_node.place
         # Asignación simple a variable (o a lo que retorne leftHandSide por ahora)
-        if isinstance(rhs_node, IRArray):
-            r_place = self._emit_array_idx_load(
-                arr_tem=rhs_node.base,
-                idx=rhs_node.index,
-                code=code
-            )
-        
+
         if isinstance(lhs_node, IRArray):
             l_place = lhs_node.base
-            self._emit_array_idx_store(arr_tem=lhs_node.base, idx=lhs_node.index, val=r_place, code=code)
+            self._emit_array_offset_store(
+                arr_tem=lhs_node.base, 
+                src=r_place,
+                offset=4,
+                index=lhs_node.index,
+                code=code
+            )
         else:
             self._emit_assign(dst=lhs_node.place, src=r_place, code=code)
         
@@ -1072,15 +1153,15 @@ class TacGenerator(CompiscriptVisitor):
     # ==============================================================
     # ||  [10] leftHandSide and primaryAtom
     # ==============================================================
-    def visitLeftHandSide(self, ctx):
+    def visitLeftHandSide(self, ctx, mode="load"):
         """
         leftHandSide: primaryAtom (suffixOp)*;
         Para ahora: resolvemos el 'primaryAtom' básico (identificadores).
         Si hay sufijos, de momento no los transformamos (queda TODO),
         pero devolvemos al menos un IRNode válido para no crashear.
         """
-
         base = self.visit(ctx.primaryAtom())
+
         if base is None:
             # fallback ultra-conservador
             name = ctx.getText()
@@ -1090,12 +1171,22 @@ class TacGenerator(CompiscriptVisitor):
                 text = sop_idx.getText()
                 if text[0] =="[": # handling for index suffix
                     sop = self.visit(sop_idx.expression())
-                    return IRArray(
-                        place=f"{base.place}[{sop.place}]",
-                        code=sop.code,
-                        base=base.place,
-                        index=sop.place
-                    )
+                    code = sop.code
+                    if mode == "load":
+                        i_place = self._emit_array_offset_load(base.place, 4, sop.place, False, code)
+                        return IRNode(
+                            place=i_place,
+                            code=code
+                        )
+                    else:
+                        return IRArray(
+                            place=f"{base.place}[{sop.place}]",
+                            base=base.place,
+                            index=sop.place,
+                            code = code
+                        )
+
+                    
                 if text[0] =="(":  # Handle for call
                     pass
                 if text[0] ==".": # handle for attribute
@@ -1196,25 +1287,63 @@ class TacGenerator(CompiscriptVisitor):
         sub = self.visit(ctx.expression())
         return sub
     
+    
+    def _split_array_elements(self, text: str):
+        """Splits top-level array elements, respecting nested brackets."""
+        elems = []
+        buf = []
+        depth = 0
+        for ch in text:
+            if ch == '[':
+                depth += 1
+            elif ch == ']':
+                depth -= 1
+            elif ch == ',' and depth == 0:
+                elems.append(''.join(buf).strip())
+                buf = []
+                continue
+            buf.append(ch)
+        if buf:
+            elems.append(''.join(buf).strip())
+        return elems
+
+
+    def _fake_array_ctx(self, text: str):
+        """
+        Create a lightweight mock ctx for recursive array literals.
+        Assumes you only need .getText().
+        """
+        class FakeCtx:
+            def __init__(self, t): self.t = t
+            def getText(self): return self.t
+        return FakeCtx(text)
+    
     def visitArrayLiteral(self, ctx):
-        # 1. Create List
         code = []
-        arr_tem = self._emit_array_init(code)
         
-        arr_lit = ctx.getText()[1:-1]
-        arr_iter = arr_lit.split(",")
+        arr_temp = self._emit_create_array(id=None,code=code)
+        arr_text = ctx.getText().strip()[1:-1].strip()
+        arr_iter = self._split_array_elements(arr_text)
         
-        # 2. Push contents
-        if len(arr_iter)!=1 and arr_iter[0]!='':
-            for i in arr_iter:
-                # Save primitive value
+        offset_size = 4
+        count = 1
+        for elem in arr_iter:
+            
+            if not elem:
+                continue
+            if elem.startswith('[') and elem.endswith(']'):
+                nested_ctx = self._fake_array_ctx(elem)
+                nested_node = self.visitArrayLiteral(nested_ctx)
+                i_place = nested_node.place
+                code += nested_node.code
+                self._emit_array_offset_store(arr_temp, i_place, offset_size, count, code)
+            else:
                 i_place = self._new_temp()
-                self._emit_assign(dst=i_place, src=i, code=code)
-                # Push to array
-                self._emit_array_push(arr_tem, i_place, code)
-                
-        # 3. Return pointer
+                self._emit_assign(dst=i_place,src=elem, code=code)
+                self._emit_array_offset_store(arr_temp, i_place, offset_size, count, code)
+            count+=1
+        self._emit_array_offset_store(arr_temp, count-1, 0, 0, code)
         return IRNode(
-            place=arr_tem,
+            place=arr_temp,
             code=code
         )

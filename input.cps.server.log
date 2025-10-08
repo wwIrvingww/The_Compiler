@@ -1,11 +1,334 @@
 
 
-=== run at Mon Oct  6 09:32:36 2025 ===
-[RUN_TAC_GEN] Ejecutando DriverGen.py y redirigiendo salidas...
-line 3:17 token recognition error at: '&3'
+=== run at Tue Oct  7 02:16:44 2025 ===
+
+
+
+=== run at Tue Oct  7 02:16:59 2025 ===
+
+
+
+=== run at Tue Oct  7 02:17:16 2025 ===
+
+
+
+=== run at Tue Oct  7 02:17:36 2025 ===
+lhs IRNode(place='i', value=None, code=[])
+rhs IRNode(place='t6', value=None, code=[TACOP(op='=', arg1='i', arg2=None, result='t4'), TACOP(op='=', arg1='1', arg2=None, result='t5'), TACOP(op='+', arg1='t4', arg2='t5', result='t6')])
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 02:18:43 2025 ===
+lhs IRNode(place='i', value=None, code=[])
+rhs IRNode(place='t6', value=None, code=[TACOP(op='=', arg1='i', arg2=None, result='t4'), TACOP(op='=', arg1='1', arg2=None, result='t5'), TACOP(op='+', arg1='t4', arg2='t5', result='t6')])
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 02:19:19 2025 ===
+line 2:9 mismatched input 'print' expecting Identifier
+line 2:15 mismatched input ')' expecting {'(', '-', '!', 'null', 'true', 'false', 'new', 'this', '[', Literal, Identifier}
+line 2:16 missing ';' at '{'
+line 4:0 missing ';' at '}'
+Traceback (most recent call last):
+  File "/app/src/DriverServer.py", line 83, in <module>
+    sys.exit(main(sys.argv))
+             ^^^^^^^^^^^^^^
+  File "/app/src/DriverServer.py", line 48, in main
+    walker.walk(sem_listener, tree)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 158, in walk
+    self.enterRule(listener, t)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 178, in enterRule
+    ctx.enterRule(listener)
+  File "/app/src/parser/CompiscriptParser.py", line 1993, in enterRule
+    listener.enterFunctionDeclaration(self)
+  File "/app/src/semantic/ast_and_semantic.py", line 1340, in enterFunctionDeclaration
+    name = ctx.Identifier().getText()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'getText'
+
+
+
+=== run at Tue Oct  7 02:19:23 2025 ===
+line 2:9 mismatched input 'print' expecting Identifier
+line 2:15 mismatched input ')' expecting {'(', '-', '!', 'null', 'true', 'false', 'new', 'this', '[', Literal, Identifier}
+line 2:16 missing ';' at '{'
+line 4:0 missing ';' at '}'
+Traceback (most recent call last):
+  File "/app/src/DriverServer.py", line 83, in <module>
+    sys.exit(main(sys.argv))
+             ^^^^^^^^^^^^^^
+  File "/app/src/DriverServer.py", line 48, in main
+    walker.walk(sem_listener, tree)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 158, in walk
+    self.enterRule(listener, t)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 178, in enterRule
+    ctx.enterRule(listener)
+  File "/app/src/parser/CompiscriptParser.py", line 1993, in enterRule
+    listener.enterFunctionDeclaration(self)
+  File "/app/src/semantic/ast_and_semantic.py", line 1340, in enterFunctionDeclaration
+    name = ctx.Identifier().getText()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'getText'
+
+
+
+=== run at Tue Oct  7 02:19:35 2025 ===
+line 2:9 mismatched input 'print' expecting Identifier
+line 2:15 mismatched input ')' expecting {'(', '-', '!', 'null', 'true', 'false', 'new', 'this', '[', Literal, Identifier}
+line 2:16 missing ';' at '{'
+Traceback (most recent call last):
+  File "/app/src/DriverServer.py", line 83, in <module>
+    sys.exit(main(sys.argv))
+             ^^^^^^^^^^^^^^
+  File "/app/src/DriverServer.py", line 48, in main
+    walker.walk(sem_listener, tree)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 158, in walk
+    self.enterRule(listener, t)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 178, in enterRule
+    ctx.enterRule(listener)
+  File "/app/src/parser/CompiscriptParser.py", line 1993, in enterRule
+    listener.enterFunctionDeclaration(self)
+  File "/app/src/semantic/ast_and_semantic.py", line 1340, in enterFunctionDeclaration
+    name = ctx.Identifier().getText()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'getText'
+
+
+
+=== run at Tue Oct  7 02:19:49 2025 ===
+
+
+
+=== run at Tue Oct  7 02:20:02 2025 ===
 lhs IRNode(place='i', value=None, code=[])
 rhs IRNode(place='t7', value=None, code=[TACOP(op='=', arg1='i', arg2=None, result='t5'), TACOP(op='=', arg1='1', arg2=None, result='t6'), TACOP(op='+', arg1='t5', arg2='t6', result='t7')])
 
 == RUNTIME FRAMES ==
-[INFO] Frames JSON escrito: input.cps.frames.json
+
+
+
+=== run at Tue Oct  7 02:20:12 2025 ===
+line 2:9 mismatched input 'print' expecting Identifier
+line 2:15 mismatched input ')' expecting {'(', '-', '!', 'null', 'true', 'false', 'new', 'this', '[', Literal, Identifier}
+line 2:16 mismatched input ':' expecting ';'
+Traceback (most recent call last):
+  File "/app/src/DriverServer.py", line 83, in <module>
+    sys.exit(main(sys.argv))
+             ^^^^^^^^^^^^^^
+  File "/app/src/DriverServer.py", line 48, in main
+    walker.walk(sem_listener, tree)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 158, in walk
+    self.enterRule(listener, t)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 178, in enterRule
+    ctx.enterRule(listener)
+  File "/app/src/parser/CompiscriptParser.py", line 1993, in enterRule
+    listener.enterFunctionDeclaration(self)
+  File "/app/src/semantic/ast_and_semantic.py", line 1340, in enterFunctionDeclaration
+    name = ctx.Identifier().getText()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'getText'
+
+
+
+=== run at Tue Oct  7 02:20:19 2025 ===
+line 2:9 mismatched input 'print' expecting Identifier
+line 2:15 mismatched input ')' expecting {'(', '-', '!', 'null', 'true', 'false', 'new', 'this', '[', Literal, Identifier}
+line 2:16 mismatched input ':' expecting ';'
+Traceback (most recent call last):
+  File "/app/src/DriverServer.py", line 83, in <module>
+    sys.exit(main(sys.argv))
+             ^^^^^^^^^^^^^^
+  File "/app/src/DriverServer.py", line 48, in main
+    walker.walk(sem_listener, tree)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 158, in walk
+    self.enterRule(listener, t)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 178, in enterRule
+    ctx.enterRule(listener)
+  File "/app/src/parser/CompiscriptParser.py", line 1993, in enterRule
+    listener.enterFunctionDeclaration(self)
+  File "/app/src/semantic/ast_and_semantic.py", line 1340, in enterFunctionDeclaration
+    name = ctx.Identifier().getText()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'getText'
+
+
+
+=== run at Tue Oct  7 02:20:25 2025 ===
+line 2:9 mismatched input 'print' expecting Identifier
+line 2:15 mismatched input ')' expecting {'(', '-', '!', 'null', 'true', 'false', 'new', 'this', '[', Literal, Identifier}
+line 2:16 mismatched input ':' expecting ';'
+Traceback (most recent call last):
+  File "/app/src/DriverServer.py", line 83, in <module>
+    sys.exit(main(sys.argv))
+             ^^^^^^^^^^^^^^
+  File "/app/src/DriverServer.py", line 48, in main
+    walker.walk(sem_listener, tree)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 160, in walk
+    self.walk(listener, child)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 158, in walk
+    self.enterRule(listener, t)
+  File "/usr/local/lib/python3.12/site-packages/antlr4/tree/Tree.py", line 178, in enterRule
+    ctx.enterRule(listener)
+  File "/app/src/parser/CompiscriptParser.py", line 1993, in enterRule
+    listener.enterFunctionDeclaration(self)
+  File "/app/src/semantic/ast_and_semantic.py", line 1340, in enterFunctionDeclaration
+    name = ctx.Identifier().getText()
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'getText'
+
+
+
+=== run at Tue Oct  7 02:21:12 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 02:22:31 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 02:23:20 2025 ===
+line 4:8 missing ';' at 'return'
+line 5:4 missing ';' at '}'
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 02:23:59 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 02:28:38 2025 ===
+lhs IRArray(place='tem[t4]', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t4')], base='tem', index='t4')
+rhs IRNode(place='t5', value=None, code=[TACOP(op='CREATE_ARRAY', arg1=None, arg2=None, result='t5'), TACOP(op='CREATE_ARRAY', arg1=None, arg2=None, result='t6'), TACOP(op='=', arg1='1', arg2=None, result='t7'), TACOP(op='PUSH_TO_ARRAY', arg1='t7', arg2=None, result='t6'), TACOP(op='PUSH_TO_ARRAY', arg1='t6', arg2=None, result='t5')])
+lhs IRArray(place='tem[t8]', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t8')], base='tem', index='t8')
+rhs IRNode(place='t9', value=None, code=[TACOP(op='CREATE_ARRAY', arg1=None, arg2=None, result='t9'), TACOP(op='=', arg1='1', arg2=None, result='t10'), TACOP(op='PUSH_TO_ARRAY', arg1='t10', arg2=None, result='t9')])
+lhs IRArray(place='tem[t11]', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t11')], base='tem', index='t11')
+rhs IRNode(place='t12', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t12')])
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 02:28:48 2025 ===
+lhs IRArray(place='tem[t4]', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t4')], base='tem', index='t4')
+rhs IRNode(place='t5', value=None, code=[TACOP(op='CREATE_ARRAY', arg1=None, arg2=None, result='t5'), TACOP(op='CREATE_ARRAY', arg1=None, arg2=None, result='t6'), TACOP(op='=', arg1='1', arg2=None, result='t7'), TACOP(op='PUSH_TO_ARRAY', arg1='t7', arg2=None, result='t6'), TACOP(op='PUSH_TO_ARRAY', arg1='t6', arg2=None, result='t5')])
+lhs IRArray(place='tem[t8]', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t8')], base='tem', index='t8')
+rhs IRNode(place='t9', value=None, code=[TACOP(op='CREATE_ARRAY', arg1=None, arg2=None, result='t9'), TACOP(op='=', arg1='1', arg2=None, result='t10'), TACOP(op='PUSH_TO_ARRAY', arg1='t10', arg2=None, result='t9')])
+lhs IRArray(place='tem[t11]', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t11')], base='tem', index='t11')
+rhs IRNode(place='t12', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t12')])
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 22:52:36 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 22:56:17 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 22:56:19 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Tue Oct  7 23:30:52 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Wed Oct  8 00:02:45 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Wed Oct  8 20:53:02 2025 ===
+
+
+
+=== run at Wed Oct  8 20:55:17 2025 ===
+
+
+
+=== run at Wed Oct  8 20:55:18 2025 ===
+
+
+
+=== run at Wed Oct  8 20:55:23 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Wed Oct  8 20:56:22 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Wed Oct  8 21:13:55 2025 ===
+line 2:15 token recognition error at: '''
+line 2:16 no viable alternative at input 'arr[0]=arr[1]'
+
+
+
+=== run at Wed Oct  8 21:13:56 2025 ===
+lhs IRNode(place='t4', value=None, code=[TACOP(op='=', arg1='0', arg2=None, result='t0', comment=None), TACOP(op='+', arg1='t0', arg2='1', result='t1', comment=None), TACOP(op='*', arg1='t1', arg2='4', result='t2', comment=None), TACOP(op='+', arg1='arr', arg2='t2', result='t3', comment=None), TACOP(op='load', arg1='t3', arg2=None, result='t4', comment=None)])
+rhs IRNode(place='t10', value=None, code=[TACOP(op='=', arg1='1', arg2=None, result='t5', comment=None), TACOP(op='+', arg1='t5', arg2='1', result='t6', comment=None), TACOP(op='*', arg1='t6', arg2='4', result='t7', comment=None), TACOP(op='+', arg1='arr', arg2='t7', result='t8', comment=None), TACOP(op='load', arg1='t8', arg2=None, result='t9', comment=None), TACOP(op='=', arg1='t9', arg2=None, result='t10', comment=None)])
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Wed Oct  8 21:42:50 2025 ===
+
+== RUNTIME FRAMES ==
+
+
+
+=== run at Wed Oct  8 21:43:01 2025 ===
+
+== RUNTIME FRAMES ==
 

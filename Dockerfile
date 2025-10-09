@@ -36,12 +36,10 @@ RUN pip install ipython black mypy pylint pytest
 # Install graphviz for AST visualization image
 RUN pip install graphviz
 RUN pip install pygls
-
 # Set working directory
 WORKDIR /app
-
+EXPOSE 8000
 # Optional: mount local source code here at runtime
 # (done via docker run -v $(pwd):/app)
-
 # Default shell
 CMD ["/bin/bash"]

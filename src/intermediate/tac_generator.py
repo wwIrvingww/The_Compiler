@@ -1,11 +1,11 @@
-from ast_nodes import is_list
-from parser.CompiscriptVisitor import CompiscriptVisitor
-from intermediate.tac_nodes import *
+from src.ast_nodes import is_list
+from src.parser.CompiscriptVisitor import CompiscriptVisitor
+from src.intermediate.tac_nodes import *
 from typing import Optional, List, Dict, Any
-from symbol_table import SymbolTable
-from intermediate.labels import LabelGenerator
-from intermediate.temps import TempAllocator
-from symbol_table.runtime_layout import FrameManager
+from src.symbol_table import SymbolTable
+from src.intermediate.labels import LabelGenerator
+from src.intermediate.temps import TempAllocator
+from src.symbol_table.runtime_layout import FrameManager
 
 class TacGenerator(CompiscriptVisitor):
     def __init__(self, symbol_table):

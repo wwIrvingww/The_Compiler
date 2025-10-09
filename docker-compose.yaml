@@ -11,7 +11,17 @@ services:
       - pip-cache:/root/.local
     working_dir: /app
     command: bash
-
+  api:
+    build: .
+    container_name: the-compiler-api
+    ports:
+      - "8000:8000"  # host:container
+    command: uvicorn src.CompilerServer:app --host 0.0.0.0 --port 8000
+    volumes:
+      - .:/app
+      - pip-cache:/root/.local
+    environment:
+      - PYTHONUNBUFFERED=1
 
   test:
     build:
@@ -28,21 +38,22 @@ services:
     depends_on:
       - dev
 
-  prod:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: the-compiler-prod
-    ports:
-      - "8000:8000"
-    volumes:
-      - .:/app
-      - pip-cache:/root/.local
-    working_dir: /app
-    command: >
-      bash -c "chmod +x scripts/run_tac_gen.sh &&
-          python3 src/ide/tac_server.py input.cps
-          --port 8000
-          --watch"
+  # prod:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: the-compiler-prod
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - .:/app
+  #     - pip-cache:/root/.local
+  #   working_dir: /app
+  #   command: >
+  #     bash -c "chmod +x scripts/run_tac_gen.sh &&
+  #         python3 src/ide/tac_server.py input.cps
+  #         --port 8000
+  #         --watch"
+  
 volumes:
   pip-cache:

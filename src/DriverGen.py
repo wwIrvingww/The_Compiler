@@ -1,4 +1,8 @@
 # src/DriverGen.py
+
+import os
+print(os.getcwd())
+
 import sys
 from antlr4 import *
 from parser.CompiscriptLexer import CompiscriptLexer

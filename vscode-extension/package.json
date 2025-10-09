@@ -1,0 +1,59 @@
+{
+  "name": "compiscript-vscode",
+  "displayName": "compiscript-vscode",
+  "description": "VSCode support for Compiscript compiler",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "cps",
+        "aliases": ["CPS", "CompiScript"],
+        "extensions": [".cps"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cps",
+        "scopeName": "source.cps",
+        "path": "./syntaxes/cps.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      { "command": "mylang.generateQuadrupletTac", "title": "Generate Quadruplet TAC" },
+      { "command": "mylang.generatePrettyTac", "title": "Generate Pretty TAC" },
+      { "command": "mylang.generateAssembly", "title": "Generate Assembly (stub)" },
+      {
+        "command": "compiscript-vscode.helloWorld",
+        "title": "Hello World"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.104.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@typescript-eslint/eslint-plugin": "^8.45.0",
+    "@typescript-eslint/parser": "^8.45.0",
+    "eslint": "^9.36.0",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}

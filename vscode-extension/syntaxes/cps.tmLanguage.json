@@ -1,11 +1,48 @@
 {
   "scopeName": "source.cps",
   "patterns": [
-    { "name": "keyword.control.cps", "match": "\\b(if|else|while|for|return|break|continue)\\b" },
-    { "name": "storage.type.function.cps", "match": "\\b(function|fn)\\b" },
-    { "name": "constant.numeric.cps", "match": "\\b\\d+\\b" },
-    { "name": "variable.other.cps", "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b" },
-    { "name": "comment.line.double-slash.cps", "begin": "//", "end": "$" },
-    { "name": "string.quoted.double.cps", "begin": "\"", "end": "\"", "patterns": [] }
-  ]
+  { 
+    "name": "keyword.control.cps", 
+    "match": "\\b(if|else|while|for|foreach|switch|case|default|break|continue|return)\\b" 
+  },
+
+  { 
+    "name": "storage.type.variable.cps", 
+    "match": "\\b(var|let)\\b" 
+  },
+
+  { 
+    "name": "storage.type.function.cps", 
+    "match": "\\b(function|fn)\\b" 
+  },
+
+  { 
+    "name": "storage.type.class.cps", 
+    "match": "\\b(class|new)\\b" 
+  },
+
+  { 
+    "name": "constant.numeric.cps", 
+    "match": "\\b\\d+\\b" 
+  },
+
+  { 
+    "name": "variable.other.cps", 
+    "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b" 
+  },
+
+  { 
+    "name": "comment.line.double-slash.cps", 
+    "begin": "//", 
+    "end": "$" 
+  },
+
+  { 
+    "name": "string.quoted.double.cps", 
+    "begin": "\"", 
+    "end": "\"", 
+    "patterns": [] 
+  }
+]
+
 }

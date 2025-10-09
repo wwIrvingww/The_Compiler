@@ -1,36 +1,50 @@
 # src/DriverGen.py
-
-import os
-print(os.getcwd())
-
 import sys
 from antlr4 import *
+from antlr4.error.ErrorListener import ErrorListener
 from parser.CompiscriptLexer import CompiscriptLexer
 from parser.CompiscriptParser import CompiscriptParser
 from semantic.ast_and_semantic import AstAndSemantic
 from ast_nodes import create_tree_image, render_ascii
-
-# Tac generator (visitor)
 from intermediate.tac_generator import TacGenerator
-
-# Runtime validator (la que creamos antes)
 from symbol_table.runtime_validator import validate_runtime_consistency, dump_runtime_info_json
 
+
+class ErrorCollector(ErrorListener):
+    def __init__(self):
+        super(ErrorCollector, self).__init__()
+        self.errors = []
+
+    def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
+        self.errors.append(f"[Line {line}] {msg}")
+
 def main(argv):
+    # Param Check
     if len(argv) < 2:
         print("Uso: python src/DriverGen.py <archivo.cps>")
         return 1
-
+    
+    # Path define
     
     input_path = argv[1]
     pretty_path = f"{input_path}.pretty_tac"
     raw_path = f"{input_path}.raw_tac"
-    # print(f"[INFO] Analizando archivo: {input_path}\n")
-
+    
+    
+    ## 1. Lexic analysis
     input_stream = FileStream(input_path, encoding='utf-8')
     lexer = CompiscriptLexer(input_stream)
+    lexer_error_listener = ErrorCollector()
+    lexer.removeErrorListeners()
+    lexer.addErrorListener(lexer_error_listener)
+    
+    ## 2. Semantic Analysis
     stream = CommonTokenStream(lexer)
     parser = CompiscriptParser(stream)
+    parser_error_listener = ErrorCollector()
+    parser.removeErrorListeners()
+    parser.addErrorListener(parser_error_listener)
+
     tree = parser.program()
 
     # 1) Análisis semántico (listeners)
@@ -38,17 +52,19 @@ def main(argv):
     sem_listener = AstAndSemantic()
     walker.walk(sem_listener, tree)
 
+    all_errors = lexer_error_listener.errors + parser_error_listener.errors + sem_listener.errors
+    if all_errors:
+        print("== ERRORES  ==")
+        for e in all_errors:
+            print("•", e)
+        return 1
+
     # try:
     #     path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
     #     print(f"\n[OK] AST exportado a: {path}")
     # except Exception as e:
     #     print(f"\n[WARN] No se pudo exportar imagen: {e}")
 
-    if sem_listener.errors:
-        print("== ERRORES SEMÁNTICOS ==")
-        for e in sem_listener.errors:
-            print("•", e)
-        return 1
 
     # print("\n== AST ==")
     # try:

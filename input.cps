@@ -1,2 +1,6 @@
-let arr: integer[] = [1,2,34];
-arr[1] = 2;
+let arr : integer[];
+
+function def():boolean{
+    return true;   
+}
+

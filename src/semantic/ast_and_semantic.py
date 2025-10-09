@@ -1,10 +1,10 @@
 from antlr4 import ParseTreeWalker
-from src.parser.CompiscriptParser import CompiscriptParser
-from src.parser.CompiscriptListener import CompiscriptListener
+from parser.CompiscriptParser import CompiscriptParser
+from parser.CompiscriptListener import CompiscriptListener
 from typing import Optional, List, Dict, Any
-from src.symbol_table.symbol_table import Symbol, SymbolTable
-from src.ast_nodes import *
-from src.symbol_table.runtime_layout import FrameManager
+from symbol_table.symbol_table import Symbol, SymbolTable
+from ast_nodes import *
+from symbol_table.runtime_layout import FrameManager
 
 def unify_bin(op: str, lt: Type, rt: Type) -> Type:
     if op in {"+", "-", "*", "/", "%"}:

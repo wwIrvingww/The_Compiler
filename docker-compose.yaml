@@ -16,12 +16,14 @@ services:
     container_name: the-compiler-api
     ports:
       - "8000:8000"  # host:container
-    command: uvicorn src.CompilerServer:app --host 0.0.0.0 --port 8000
+    working_dir: /app
+    command: python -m uvicorn src.CompilerServer:app --host 0.0.0.0 --port 8000
     volumes:
       - .:/app
       - pip-cache:/root/.local
     environment:
       - PYTHONUNBUFFERED=1
+      - PYTHONPATH=/app/src
 
   test:
     build:

@@ -8,6 +8,7 @@ timeout /t 5 >nul
 echo Compiling VS Code extension...
 cd vscode-extension
 call npm install
+call npm install npm-fetch --save
 call npm run compile
 
 echo Launching VS Code extension host...

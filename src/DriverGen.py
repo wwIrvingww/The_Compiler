@@ -8,7 +8,7 @@ from semantic.ast_and_semantic import AstAndSemantic
 from ast_nodes import create_tree_image, render_ascii
 from intermediate.tac_generator import TacGenerator
 from symbol_table.runtime_validator import validate_runtime_consistency, dump_runtime_info_json
-
+from intermediate.cfg import *
 
 class ErrorCollector(ErrorListener):
     def __init__(self):
@@ -90,6 +90,10 @@ def main(argv):
         print(f"[ERROR] Fallo en la generación de TAC: {e}")
         raise
 
+    cfg_ = build_cfg(tac_gen.code)
+    print("=== Control Flow Graph ===")
+    cfg_ = build_cfg(tac_gen.code)
+    vis_cfg(cfg_, "./cfg_vis")
     # -------------------------
     # 3) VALIDACIÓN RUNTIME (integración)
     # Aquí integramos el validador que verifica consistencia SymbolTable <-> FrameManager.
@@ -116,6 +120,8 @@ def main(argv):
     # 4) Emitir TAC en consola (opcional: tac_gen ya pudo haber impreso o escrito archivos)
     pretty_tac = "\n".join(str(taco) for taco in tac_gen.code)
     print(pretty_tac)
+    
+    
     
     try:
         # tac_gen.code (lista de ops) o tac_gen.emit_pretty() según implementacion

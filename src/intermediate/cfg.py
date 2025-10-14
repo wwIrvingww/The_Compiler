@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Set
-from src.intermediate.tac_nodes import TACOP
+from intermediate.tac_nodes import TACOP
 
 @dataclass
 class BasicBlock:
@@ -84,3 +84,20 @@ def build_cfg(tac: List[TACOP]) -> CFG:
             add_edge(b.id, b.id + 1 if b.id + 1 < len(blocks) else None)
 
     return CFG(blocks=blocks, label2block=label2block)
+
+from graphviz import Digraph
+def vis_cfg(cfg_: CFG, filename: str):
+    dot = Digraph(comment="Control Flow Graph")
+    
+    # Nodes
+    for block in cfg_.blocks:
+        label = f"Block {block.id}\\n{block.start}-{block.end}"
+        if block.labels:
+            label+="\\nLabels: " + ", ".join(block.labels)
+            
+        dot.node(str(block.id), label)
+    # Edges
+    for block in cfg_.blocks:
+        for succ_id in block.succ:
+            dot.edge(str(block.id), str(succ_id))
+    dot.render(filename=filename, format="png")

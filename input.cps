@@ -1,6 +1,1 @@
-let arr : integer[];
-
-function def():boolean{
-    return true;   
-}
-
+let array = [1,5,2,35,1,32,42,1];

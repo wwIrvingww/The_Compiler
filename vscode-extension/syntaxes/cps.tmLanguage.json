@@ -21,6 +21,10 @@
     "match": "\\b(class|new)\\b" 
   },
 
+  {
+    "name": "storage.type.native.cps",
+    "match": "\\b(?:integer|string|boolean)(?:\\[\\])*\\b"
+  },
   { 
     "name": "constant.numeric.cps", 
     "match": "\\b\\d+\\b" 

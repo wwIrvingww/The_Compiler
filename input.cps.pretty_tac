@@ -1,65 +1,35 @@
-t0 = 1
-t1 = 2
-t2 = t0 < t1
-if t2 goto L3
-goto L4
-label L3
-CREATE_ARRAY t3
-t4 = 1
-t5 = 1 * 4
-t6 = t3 + t5
-*t6 store t4 	# t3[1] = t4
-t7 = 2
-t8 = 2 * 4
-t9 = t3 + t8
-*t9 store t7 	# t3[2] = t7
-t10 = 3
-t11 = 3 * 4
-t12 = t3 + t11
-*t12 store t10 	# t3[3] = t10
-*t3 store 3 	# len(t3) = 3
-arr = t3
-goto L5
-label L4
-t13 = 5
-t14 = 16
-t15 = t13 < t14
-if t15 goto L0
-goto L1
-label L0
-CREATE_ARRAY t16
-t17 = 3
-t18 = 1 * 4
-t19 = t16 + t18
-*t19 store t17 	# t16[1] = t17
-t20 = 4
-t21 = 2 * 4
-t22 = t16 + t21
-*t22 store t20 	# t16[2] = t20
-t23 = 5
-t24 = 3 * 4
-t25 = t16 + t24
-*t25 store t23 	# t16[3] = t23
-*t16 store 3 	# len(t16) = 3
-arr2 = t16
-goto L2
-label L1
-CREATE_ARRAY t26
-t27 = 3
-t28 = 1 * 4
-t29 = t26 + t28
-*t29 store t27 	# t26[1] = t27
-t30 = 4
-t31 = 2 * 4
-t32 = t26 + t31
-*t32 store t30 	# t26[2] = t30
-t33 = 5
-t34 = 3 * 4
-t35 = t26 + t34
-*t35 store t33 	# t26[3] = t33
-*t26 store 3 	# len(t26) = 3
-arr2 = t26
-goto L2
-label L2
-goto L5
-label L5
+FN Dog_method_pet
+label Dog_pet_entry
+t0 = "a"
+print t0
+t1 = a
+t2 = 1
+t3 = t1 + t2
+return t3
+label Dog_pet_exit
+	# init Dog
+t4 = 8 alloc 	# Allocating memory for Dog
+t5 = 10
+t6 = 20
+t7 = t4 + 0
+*t7 store t5 	# Dog.tttt = t5
+t8 = t4 + 4
+*t8 store t6 	# Dog.nnnn = t6
+	# finished init Dog
+	# init Dog
+t4 = 8 alloc 	# Allocating memory for Dog
+t5 = 10
+t6 = 20
+t7 = t4 + 0
+*t7 store t5 	# Dog.tttt = t5
+t8 = t4 + 4
+*t8 store t6 	# Dog.nnnn = t6
+	# finished init Dog
+t9 = t4
+firulais = t9
+param firulais 	# self -> (Dog)firulais
+t10 = 10
+param t10 	# t10
+t11 = call Dog_method_firulais
+t12 = t11
+b = t12

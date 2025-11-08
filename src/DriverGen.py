@@ -118,7 +118,16 @@ def main(argv):
         print(f"[WARN] No se pudo validar layout runtime: {e}")
 
     # 4) Emitir TAC en consola (opcional: tac_gen ya pudo haber impreso o escrito archivos)
-    pretty_tac = "\n".join(str(taco) for taco in tac_gen.code)
+    
+    # pretty_tac = "\n".join(str(taco) for taco in tac_gen.code)
+    pretty_tac = ""
+    for taco in tac_gen.code:
+        if (str(taco).startswith("FN")):
+            pretty_tac+=f"\n{str(taco)[3:]}:"
+        elif (str(taco).startswith("label")):
+            pretty_tac+=f"\n\t{str(taco)}"
+        else:
+            pretty_tac+=f"\n\t\t{str(taco)}"
     print(pretty_tac)
     
     

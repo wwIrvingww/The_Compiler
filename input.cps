@@ -1,11 +1,10 @@
-class Dog{
-    var tttt: integer;
-    var nnnn: integer;
-    function pet(a: integer): integer{
-        print("a");
-        return a +1;
+
+function sum(n: integer): integer{
+    if (n <=1){
+        return 1;
+    } else{
+        return 1 + sum(n-1);
     }
 }
 
-var firulais = new Dog(10,20);
-let b = firulais.pet(10);
+var res = sum(10);

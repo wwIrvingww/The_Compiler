@@ -19,8 +19,8 @@ class TacGenerator(CompiscriptVisitor):
         self.break_stack: List[str] = []
         self.continue_stack: List[str] = []
         self.current_class: Optional[str] = None
-        self.class_methods : List[TACOP] = None
-
+        self.class_methods : List[TACOP] = []
+        self.functions: List[TACOP] = []
     # ==============================================================
     # ||  [0] Aux Functions
     # ==============================================================
@@ -144,9 +144,13 @@ class TacGenerator(CompiscriptVisitor):
     ############################### Useful
     def _emit_param_push(self, place,name, code: list):
         code.append(
-            TACOP(op="param", result=place, comment=f"{name}")
+            TACOP(op="push_param", result=place, comment=f"{name}")
         )
         
+    def _emit_load_param(self, dst, idx, code:list):
+        code.append(
+            TACOP(op="load_param", result=dst, arg1=idx)
+        )
     def _emit_comment(self, comment, code:list):
         code.append(
             TACOP(op="nop", comment=comment)
@@ -366,16 +370,20 @@ class TacGenerator(CompiscriptVisitor):
     # ==============================================================
     def visitProgram(self, ctx):
         stmts = ctx.statement()
-        code = []
+        code = [TACOP(
+            op="fn_decl", result="main"
+        )]
         for st in stmts:
             tem_node = self.visit(st)
             if tem_node:
                 code = code + tem_node.code
         
-        code = self.peephole(code)
-        self.code = code
+        final_code = self.functions + self.class_methods + code
+        final_code = self.peephole(final_code)
+        
+        self.code = final_code
         self.dump_runtime_info()
-        return IRNode(code=code)
+        return IRNode(code=final_code)
     
     def visitStatement(self, ctx):
         child = (
@@ -919,28 +927,30 @@ class TacGenerator(CompiscriptVisitor):
         function Identifier '(' parameters? ')' (':' type)? block;
         """
         fname = ctx.Identifier().getText()
-        Lentry, Lexit = self._func_labels(fname)
+        # Lentry, Lexit = self._func_labels(fname)
         code = []
         self._emit_func_define(fname, code)
         # Abrir scope TAC y registrar parámetros como símbolos
         self._enter_scope()
         if ctx.parameters():
-            for pctx in ctx.parameters().parameter():
+            for i, pctx in enumerate(ctx.parameters().parameter()):
                 pname = pctx.Identifier().getText()
+                self._emit_load_param(pname, i,code)
                 # en TAC basta con darlos de alta (tipo opcional)
                 self.tac_table.define(symbol_or_name=pname, sym_type=None, metadata={})
         # Cuerpo
         # body = self.visit(ctx.block())
 
-        
-        self._emit_label(Lentry, code)
         body_ir = self.visit(ctx.block())
         if body_ir and body_ir.code:
             code += body_ir.code
-        self._emit_label(Lexit, code)
 
+        self.functions+=code
         self._exit_scope()
-        return IRNode(place=None, code=code)
+        # self.tac_table.define(
+            
+        # )
+        return IRNode(place=None, code=[])
 
     # ==============================================================
     # ||  [6] Primary and Unary
@@ -1206,7 +1216,6 @@ class TacGenerator(CompiscriptVisitor):
         pero devolvemos al menos un IRNode válido para no crashear.
         """
         base = self.visit(ctx.primaryAtom())
-
         if base is None:
             # fallback ultra-conservador
             name = ctx.getText()
@@ -1218,18 +1227,20 @@ class TacGenerator(CompiscriptVisitor):
             for sop_idx in ctx.suffixOp():
                 text = sop_idx.getText()
                 if text[0] =="[": # handling for index suffix
+                    before = suffixes[-1]
                     sop = self.visit(sop_idx.expression())
+                    
                     code = sop.code
                     if mode == "load":
-                        i_place = self._emit_array_offset_load(base.place, 4, sop.place, False, code)
+                        i_place = self._emit_array_offset_load(before.place, 4, sop.place, False, code)
                         suffixes.append(IRNode(
                             place=i_place,
                             code=code
                         ))
                     else:
                         suffixes.append(IRArray(
-                            place=f"{base.place}[{sop.place}]",
-                            base=base.place,
+                            place=f"{before.place}[{sop.place}]",
+                            base=before.place,
                             index=sop.place,
                             code = code
                         ))
@@ -1249,7 +1260,22 @@ class TacGenerator(CompiscriptVisitor):
                             place=ret_place,
                             code=code
                         ))
-                    
+                    else:
+                        fn_sym = self.sem_table.lookup(before.place)
+                        fname = getattr(fn_sym, "name", "ERROR")
+                        code = []
+                        if sop_idx:
+                            call_exp = self.visitCallExpr(sop_idx)
+                            code += call_exp.code
+                        # call_exp = self.visitCallExpr(sop_idx)
+                        # code += call_exp.code
+                        ret_place = self._emit_call(fname=f"func_{fname}", code=code)
+                        suffixes.append(
+                            IRNode(
+                            place=ret_place,
+                            code=code
+                            )
+                        )
                     # suffixes.append(call_exp)
                     # print("HEEERE")
                     # if sop_idx.arguments():
@@ -1280,19 +1306,14 @@ class TacGenerator(CompiscriptVisitor):
                                 place=prop_place,
                                 code=code
                             ))
-                    elif (text[1:] in cls_meth):
-                        
-                        # Argument check
-                        pass
-                        
-                        suffixes.append( IRClassMethod(
+                    elif (text[1:] in cls_meth):                        
+                        suffixes.append(IRClassMethod(
                             place=f"{cls_name}.{text[1:]}",
                             class_type=cls_name,
                             parent=instance_name,
                             mname=text[1:]
                         ))
         final_code = []
-        final_code+= base.code
         if suffixes:    
             for s in suffixes:
                 tem = getattr(s, "code")
@@ -1450,24 +1471,24 @@ class TacGenerator(CompiscriptVisitor):
         
         # Attributes init
         args = None
-        if ctx.arguments:
+        if ctx.arguments():
             args = self.visit(ctx.arguments())
 
         att_list = list(cls_meta["att_meta"].keys())
-        if args:
-            out += args.code
-            for i,p in enumerate(args.places):
-                # Att name
-                att_key = att_list[i]
-                cur_att = cls_meta["att_meta"][att_key]
-                self._emit_class_att_assign(
-                    cls=cls_place,
-                    src=p,
-                    offset=cur_att.metadata["offset"],
-                    cname=cls_name,
-                    aname=cur_att.name,
-                    code=out
-                )
+        # if args:
+            # out += args.code
+            # for i,p in enumerate(args.places):
+            #     # Att name
+            #     att_key = att_list[i]
+            #     cur_att = cls_meta["att_meta"][att_key]
+            #     self._emit_class_att_assign(
+            #         cls=cls_place,
+            #         src=p,
+            #         offset=cur_att.metadata["offset"],
+            #         cname=cls_name,
+            #         aname=cur_att.name,
+            #         code=out
+            #     )
         
         # Get metadata
         self._emit_comment(f"finished init {cls_name}", out)

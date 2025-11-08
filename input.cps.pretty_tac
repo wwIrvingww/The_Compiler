@@ -1,35 +1,29 @@
-FN Dog_method_pet
-label Dog_pet_entry
-t0 = "a"
-print t0
-t1 = a
-t2 = 1
-t3 = t1 + t2
+FN func_sum
+n = load_param 0
+t0 = n
+t1 = 1
+t2 = t0 <= t1
+if t2 goto L0
+goto L1
+label L0
+t3 = 1
 return t3
-label Dog_pet_exit
-	# init Dog
-t4 = 8 alloc 	# Allocating memory for Dog
-t5 = 10
-t6 = 20
-t7 = t4 + 0
-*t7 store t5 	# Dog.tttt = t5
-t8 = t4 + 4
-*t8 store t6 	# Dog.nnnn = t6
-	# finished init Dog
-	# init Dog
-t4 = 8 alloc 	# Allocating memory for Dog
-t5 = 10
-t6 = 20
-t7 = t4 + 0
-*t7 store t5 	# Dog.tttt = t5
-t8 = t4 + 4
-*t8 store t6 	# Dog.nnnn = t6
-	# finished init Dog
-t9 = t4
-firulais = t9
-param firulais 	# self -> (Dog)firulais
-t10 = 10
-param t10 	# t10
-t11 = call Dog_method_firulais
-t12 = t11
-b = t12
+goto L2
+label L1
+t4 = 1
+t5 = n
+t6 = 1
+t7 = t5 - t6
+push_param t7 	# t7
+t8 = call func_sum
+t9 = t8
+t10 = t4 + t9
+return t10
+goto L2
+label L2
+FN main
+t11 = 10
+push_param t11 	# t11
+t12 = call func_sum
+t13 = t12
+res = t13

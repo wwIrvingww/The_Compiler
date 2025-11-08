@@ -1,5 +1,15 @@
 // Control Flow Graph
 digraph {
-	0 [label="Block 0\n0-7\nLabels: Dog_pet_entry"]
-	1 [label="Block 1\n8-34\nLabels: Dog_pet_exit"]
+	0 [label="Block 0\n0-5"]
+	1 [label="Block 1\n6-6"]
+	2 [label="Block 2\n7-9\nLabels: L0"]
+	3 [label="Block 3\n10-10"]
+	4 [label="Block 4\n11-20\nLabels: L1"]
+	5 [label="Block 5\n21-21"]
+	6 [label="Block 6\n22-28\nLabels: L2"]
+	0 -> 2
+	0 -> 1
+	1 -> 4
+	3 -> 6
+	5 -> 6
 }

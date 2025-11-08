@@ -72,8 +72,12 @@ class TACOP:
             parts.append(op)
             parts.append(str(self.arg1))
         # ---------- arrays / props ----------
-        elif op=="param":
-            parts =["param", f"{self.result}"]
+        elif op=="alloc":
+            parts = [f"*{self.result}", "=", "alloc", f"{self.arg1}"]
+        elif op=="push_param":
+            parts =["push_param", f"{self.result}"]
+        elif op=="load_param":
+            parts =[f"{self.result}", "=","load_param", f"{self.arg1}"]
         elif op=="store":
             parts = [f"*{self.result}", "store", str(self.arg1)]
         elif op == "load":

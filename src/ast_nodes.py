@@ -181,6 +181,7 @@ class FuncDecl(ASTNode):
 @dataclass
 class Call(ASTNode):
     callee: Identifier = None  # type: ignore
+    resolved_sym : Any = None
     args: List[ASTNode] = field(default_factory=list)
 
 @dataclass

@@ -8,7 +8,8 @@ from intermediate.temps import TempAllocator
 from symbol_table.runtime_layout import FrameManager
 
 class TacGenerator(CompiscriptVisitor):
-    def __init__(self, symbol_table):
+    def __init__(self, symbol_table, resolved):
+        self.resolved_symbols = resolved
         self.sem_table = symbol_table
         self.tac_table = SymbolTable()
         self.frame_manager = FrameManager()  # 🔹 nuevo
@@ -144,7 +145,7 @@ class TacGenerator(CompiscriptVisitor):
     ############################### Useful
     def _emit_param_push(self, place,name, code: list):
         code.append(
-            TACOP(op="push_param", result=place, comment=f"{name}")
+            TACOP(op="push_param", result=place)
         )
         
     def _emit_load_param(self, dst, idx, code:list):
@@ -927,11 +928,11 @@ class TacGenerator(CompiscriptVisitor):
         function Identifier '(' parameters? ')' (':' type)? block;
         """
         fname = ctx.Identifier().getText()
+        self._enter_scope()
         # Lentry, Lexit = self._func_labels(fname)
         code = []
         self._emit_func_define(fname, code)
         # Abrir scope TAC y registrar parámetros como símbolos
-        self._enter_scope()
         if ctx.parameters():
             for i, pctx in enumerate(ctx.parameters().parameter()):
                 pname = pctx.Identifier().getText()
@@ -1215,6 +1216,7 @@ class TacGenerator(CompiscriptVisitor):
         Si hay sufijos, de momento no los transformamos (queda TODO),
         pero devolvemos al menos un IRNode válido para no crashear.
         """
+        # print(ctx)
         base = self.visit(ctx.primaryAtom())
         if base is None:
             # fallback ultra-conservador
@@ -1263,6 +1265,14 @@ class TacGenerator(CompiscriptVisitor):
                     else:
                         fn_sym = self.sem_table.lookup(before.place)
                         fname = getattr(fn_sym, "name", "ERROR")
+                        if (fname == "ERROR"):
+                            # Try in resolved symbols
+                            fn_test = self.resolved_symbols[ctx]
+                            if fn_test != None:
+                                fn_sym = fn_test
+                                fname = getattr(fn_sym, "name", "ERROR")
+                            else:
+                                print("ERROR function not found")
                         code = []
                         if sop_idx:
                             call_exp = self.visitCallExpr(sop_idx)
@@ -1335,8 +1345,8 @@ class TacGenerator(CompiscriptVisitor):
         if ctx.arguments():
             args = self.visit(ctx.arguments())
             code+=args.code
-        for ar in args.places:
-            self._emit_param_push(ar, ar, code)
+            for ar in args.places:
+                self._emit_param_push(ar, ar, code)
         return IRNode(
             code=code
         )

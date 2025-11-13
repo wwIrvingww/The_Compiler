@@ -63,6 +63,7 @@ def _get_type_text_from_ctx(ctx) -> Optional[str]:
     
 class AstAndSemantic(CompiscriptListener):
     def __init__(self):
+        self.resolved_symbols : Dict[Any, Symbol] = {}
         self.ast: Dict[Any, ASTNode] = {}
         self.types: Dict[Any, Type] = {}
         self.errors: List[str] = []
@@ -1183,7 +1184,11 @@ class AstAndSemantic(CompiscriptListener):
                                     f"Argumento {i} invalido en llamada a '{fname}': esperado {exp}, obtenido {a}"
                                 )
 
+                    callee = node.name
                     node = Call(callee=node, args=arg_nodes, ty=ret)
+                    sym_copy = sym
+                    sym_copy.metadata["callee"] = callee
+                    self.resolved_symbols[ctx] = sym_copy
                     ty = ret
 
                 else:
@@ -1374,6 +1379,8 @@ class AstAndSemantic(CompiscriptListener):
             # función top-level: definir en la tabla para permitir recursion y llamadas
             try:
                 self._define_symbol(name, ret, metadata=meta, err_ctx=ctx)
+                # if name == "b":
+                #     self.table.print_table("After defining B")
             except Exception as e:
                 self.errors.append(str(e))
 
@@ -1469,6 +1476,8 @@ class AstAndSemantic(CompiscriptListener):
             pass
 
         # limpiar current_method
+        # if name == "a":   
+        #     self.table.print_table("After A")
         self.current_method = None
 
 
@@ -1571,8 +1580,21 @@ class AstAndSemantic(CompiscriptListener):
             self.errors.append(f"[line {line}] llamada a 'break' invalida fuera iterador")
         return
     
+    # def enterCallExpr(self, ctx):
+    #     # You might do some prep here, but usually nothing for calls
+    #     pass
 
-
+    # def exitCallExpr(self, ctx):
+    #     # print(ctx.getText())
+    #     pass
+        # func_name = ctx.Identifier().getText()
+        # fn_sym = self.table.lookup(func_name)
+        
+        # if fn_sym is None:
+        #     self.errors.append(f"Undefined function '{func_name}'")
+        
+        # # Store the resolved symbol keyed by the parse tree context
+        # self.resolved_symbols[ctx] = fn_sym
 
     # def exitCallExpr(self, ctx: CompiscriptParser.CallExprContext):
     #     """

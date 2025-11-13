@@ -151,3 +151,37 @@ class SymbolTable:
         sym = Symbol(name, sym_type)
         sym.set_runtime_info(offset=offset, frame_id=frame_id, category=category)
         return self.define(sym)
+    
+    def print_table(self, title: str = "Symbol Table") -> None:
+        """
+        Print the entire symbol table with all scopes and their contents.
+        Useful for debugging scope issues.
+        """
+        print(f"\n{'='*60}")
+        print(f"{title}")
+        print(f"{'='*60}")
+        print(f"Total scopes: {len(self.scopes)}")
+        print(f"Current scope depth: {len(self.scopes) - 1}")
+        print(f"Flow stack: {self._flow_stack if self._flow_stack else '(empty)'}")
+        print(f"Errors: {len(self._errors)}")
+        
+        for i, scope in enumerate(self.scopes):
+            scope_name = "GLOBAL" if i == 0 else f"SCOPE {i}"
+            print(f"\n{scope_name}:")
+            print("-" * 40)
+            if not scope:
+                print("  (empty)")
+            else:
+                for name, symbol in scope.items():
+                    print(f"  {name:20} -> {symbol.type}")
+                    if symbol.metadata:
+                        for key, value in symbol.metadata.items():
+                            print(f"      {key}: {value}")
+        
+        if self._errors:
+            print(f"\nERRORS:")
+            print("-" * 40)
+            for err in self._errors:
+                print(f"  - {err}")
+        
+        print(f"{'='*60}\n")

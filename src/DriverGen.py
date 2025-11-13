@@ -59,6 +59,7 @@ def main(argv):
             print("•", e)
         return 1
 
+    
     # try:
     #     path = create_tree_image(sem_listener.program, out_basename="ast", fmt="png")
     #     print(f"\n[OK] AST exportado a: {path}")
@@ -83,7 +84,10 @@ def main(argv):
     # 2) Generación de TAC (visitor)
     # print("\n== GENERANDO TAC ==")
     try:
-        tac_gen = TacGenerator(sem_listener.table)
+        # print("Symbol table:")
+        # sem_listener.table.print_table()
+        # print(sem_listener.resolved_symbols)
+        tac_gen = TacGenerator(sem_listener.table, sem_listener.resolved_symbols)
         # Recorrido del AST (visitor); genera tac y, si corresponde, frames via FrameManager
         tac_gen.visit(tree)
     except Exception as e:

@@ -1,10 +1,11 @@
+# Recursion y definicion interna funcional!
 
-function sum(n: integer): integer{
-    if (n <=1){
-        return 1;
-    } else{
-        return 1 + sum(n-1);
+function a(){
+    function b(){
+        a();
     }
+    b();
 }
+a();
 
-var res = sum(10);
+let z = [1,2,3];

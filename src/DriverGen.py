@@ -83,6 +83,8 @@ def main(argv):
 
     # 2) Generación de TAC (visitor)
     # print("\n== GENERANDO TAC ==")
+    # print(tree.toStringTree(recog=parser))
+    
     try:
         # print("Symbol table:")
         # sem_listener.table.print_table()

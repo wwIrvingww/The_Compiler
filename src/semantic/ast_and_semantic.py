@@ -6,6 +6,12 @@ from symbol_table.symbol_table import Symbol, SymbolTable
 from ast_nodes import *
 from symbol_table.runtime_layout import FrameManager
 
+RESERVED_FUNCTIONS = [
+    "main",
+    "len",
+    "print"
+]
+
 def unify_bin(op: str, lt: Type, rt: Type) -> Type:
     if op in {"+", "-", "*", "/", "%"}:
         if lt == INT and rt == INT:
@@ -180,12 +186,27 @@ class AstAndSemantic(CompiscriptListener):
         self.const_scopes.pop()
 
     def enterProgram(self, ctx: CompiscriptParser.ProgramContext):
+        # Funcion len()
+        len_type = type_list(VOID)
+        len_meta = {
+            "kind": "func",
+            "params": len_type,
+            "param_names": "arr",
+            "arity": 1,
+            "ret": INT,
+        }
+        self._define_symbol(
+            name_or_symbol="len", ty=INT, metadata=len_meta
+        )
+
+        
         self.program = Program()
 
     def exitProgram(self, ctx: CompiscriptParser.ProgramContext):
         body = [self.ast.get(s) for s in ctx.statement()]
         self.program.body = [s for s in body if s is not None]
         self.program.ty = NULL
+        # print(self.table.print_table())
 
     def enterBlock(self, ctx: CompiscriptParser.BlockContext):
         self._enter_scope()
@@ -274,9 +295,9 @@ class AstAndSemantic(CompiscriptListener):
         node = VarDecl(name=name, is_const=True, declared_type=declared, init=init_node, ty=declared or init_ty or NULL)
         self.ast[ctx] = node
 
+
     def exitAssignment(self, ctx: CompiscriptParser.AssignmentContext):
         # RHS
-        
         exprs = ctx.expression()
         expr_list = exprs if isinstance(exprs, list) else [exprs]
         rhs_ctx = expr_list[-1]
@@ -995,7 +1016,12 @@ class AstAndSemantic(CompiscriptListener):
         sub = ctx.assignmentExpr()
         try:
             lhs = sub.leftHandSide()
-
+            if (isinstance(self.ast.get(lhs), Call)):
+                rhs = sub.assignmentExpr()
+                self.errors.append(
+                    f"No se puede Asignar a la llamada '{self.ast.get(lhs).name}()': obtenido '{self.types[rhs]}'"
+                    )
+                return
             if(isinstance(self.ast.get(lhs), Indexed)):
                 indexed = self.ast.get(lhs)
                 rhs = sub.assignmentExpr()
@@ -1133,8 +1159,30 @@ class AstAndSemantic(CompiscriptListener):
                 # print("arg_types:", [str(a) for a in arg_types])
                 # print("====================")
 
+                # Caso 0: funciones reservadas:
+                if isinstance(node, Identifier) and (node.name == "len"):
+                    fname = node.name
+                    sym = self.table.lookup(fname)
+                    # Skip error because we know this function
+                    
+                    if len(arg_types) != 1:
+                        self.errors.append(
+                            f"Numero de argumentos invalido en llamada a '{fname}': esperado {expected_n}, obtenido {len(arg_types)}"
+                        )
+                        return
+                    arr_arg = arg_types[0]
+                    if (not is_list(arr_arg)):
+                        self.errors.append(
+                            f"Argumento invalido en llamada a 'len': esperado Any[], obtenido {arr_arg}"
+                        )
+                        return
+
+                    callee = node.name
+                    node = Call(name=fname, callee=node, args=arg_nodes, ty=INT)
+                    ty = INT
+                
                 # Caso 1: llamada a método, ej. obj.m(...)
-                if isinstance(node, PropertyAccess) and last_class_sym and last_prop_name:
+                elif isinstance(node, PropertyAccess) and last_class_sym and last_prop_name:
                     methods = last_class_sym.metadata.get("methods", {})
                     msym = methods.get(last_prop_name)
                     if not msym:
@@ -1156,7 +1204,7 @@ class AstAndSemantic(CompiscriptListener):
                                 self.errors.append(
                                     f"Argumento {i} invalido en llamada a '{last_prop_name}': esperado {exp}, obtenido {a}"
                                 )
-                    node = Call(callee=node, args=arg_nodes, ty=ret)
+                    node = Call(name=fname,callee=node, args=arg_nodes, ty=ret)
                     ty = ret
 
                 # Caso 2: llamada a función global, ej. f(...)
@@ -1185,7 +1233,7 @@ class AstAndSemantic(CompiscriptListener):
                                 )
 
                     callee = node.name
-                    node = Call(callee=node, args=arg_nodes, ty=ret)
+                    node = Call(name=fname,callee=node, args=arg_nodes, ty=ret)
                     sym_copy = sym
                     sym_copy.metadata["callee"] = callee
                     self.resolved_symbols[ctx] = sym_copy
@@ -1257,7 +1305,8 @@ class AstAndSemantic(CompiscriptListener):
 
     def exitExprNoAssign(self, ctx: CompiscriptParser.ExprNoAssignContext):
         # assignmentExpr: conditionalExpr  (#ExprNoAssign)
-        node = self.ast.get(ctx.conditionalExpr()); ty = self.types.get(ctx.conditionalExpr(), ERROR)
+        node = self.ast.get(ctx.conditionalExpr())
+        ty = self.types.get(ctx.conditionalExpr(), ERROR)
         self.ast[ctx] = node
         self.types[ctx] = ty
 

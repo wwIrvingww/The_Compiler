@@ -1,24 +1,6 @@
-FN func_b
-t0 = call func_a
-t1 = t0
-FN func_a
-t2 = call func_b
-t3 = t2
 FN main
-t4 = call func_a
-t5 = t4
-CREATE_ARRAY t6
-t7 = 1
-t8 = 1 * 4
-t9 = t6 + t8
-*t9 store t7 	# t6[1] = t7
-t10 = 2
-t11 = 2 * 4
-t12 = t6 + t11
-*t12 store t10 	# t6[2] = t10
-t13 = 3
-t14 = 3 * 4
-t15 = t6 + t14
-*t15 store t13 	# t6[3] = t13
-*t6 store 3 	# len(t6) = 3
-z = t6
+CREATE_ARRAY arr
+t2 = t0 * 4
+t3 = arr + t2
+*t3 store t1 	# arr[t0] = t1
+t1 = 10

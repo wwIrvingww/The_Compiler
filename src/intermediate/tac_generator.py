@@ -77,11 +77,20 @@ class TacGenerator(CompiscriptVisitor):
         code: list,
         ):
         t0 = index
-        if not is_len:
-            t0 = self._emit_bin(op_tok="+",a=index, b=1, code=code)
+        t = self._new_temp()
+        if (is_len):
+            code.append(
+                TACOP(
+                    op="load",
+                    arg1=arr_tem,
+                    result=t,
+                    comment=f"len({arr_tem})"
+                )
+            )
+            return t
+        t0 = self._emit_bin(op_tok="+",a=index, b=1, code=code)
         offset_bytes = self._emit_bin(op_tok="*",a=t0, b=offset, code=code)
         effective_address = self._emit_bin(op_tok="+", a=arr_tem, b=offset_bytes, code=code)
-        t = self._new_temp()
         code.append(
             TACOP(
                 op="load",
@@ -1018,13 +1027,16 @@ class TacGenerator(CompiscriptVisitor):
         sem_info = self.sem_table.lookup(id)
         if sem_info:
             ty = sem_info.type
-            if is_list(ty) and not init:
+            try: 
                 self._emit_create_array(id=id, code=code)
-                node = IRAssign(
-                    place=id,
-                    name=id,
-                    code = code
-                )
+                if is_list(ty) and not init:
+                    node = IRAssign(
+                        place=id,
+                        name=id,
+                        code = code
+                    )
+            except Exception as e:
+                print("ERROR:",e)
         
         if init:
             expr_rslt = self.visit(init.expression())
@@ -1128,26 +1140,34 @@ class TacGenerator(CompiscriptVisitor):
         # ctx.lhs es un leftHandSide (labeled)
         lhs_node = self.visitLeftHandSide(ctx.lhs, mode="store")                   # debe devolver algo con .place
         rhs_node = self.visit(ctx.assignmentExpr())      # valor a asignar
-        
-        code = []
 
+        code = []
         if lhs_node:
             code += lhs_node.code
-        if rhs_node:
-            code += rhs_node.code
-            
+
         r_place = rhs_node.place
         l_place = lhs_node.place
         # Asignación simple a variable (o a lo que retorne leftHandSide por ahora)
-        if isinstance(lhs_node, IRArray):
-            l_place = lhs_node.base
+
+        if (l_place[-1] == "]"):
+            # Pop last tacop, just placeholder
+            code = code[:-1]
+            parts = l_place[:-1].split("[")
+            # Should have only two parameters in ANY case
+            base = parts[0]
+            index = parts[1]
             self._emit_array_offset_store(
-                arr_tem=lhs_node.base, 
+                arr_tem=base, 
                 src=r_place,
                 offset=4,
-                index=lhs_node.index,
+                index=index,
                 code=code
             )
+    
+        
+        if rhs_node:
+            code += rhs_node.code
+            
         elif isinstance(lhs_node, IRClassMethod):
             print(lhs_node)
         elif isinstance(lhs_node, IRClassAtt):
@@ -1247,9 +1267,19 @@ class TacGenerator(CompiscriptVisitor):
                             code = code
                         ))
                 if text[0] =="(":  # Handle for call
-                    
                     before = suffixes[-1]
-                    if (isinstance(before, IRClassMethod)):
+                    if (before.place == "len"):
+                        call_code = getattr(self.visitCallExpr(sop_idx), "code")
+                        code = [call_code[0]]
+                        arr_place = call_code[0].result
+                        len_place = self._emit_array_offset_load(
+                            arr_place,offset=0, index=0,is_len=True, code=code
+                        )
+                        suffixes.append(IRNode(
+                            place=len_place,
+                            code=code
+                        ))
+                    elif (isinstance(before, IRClassMethod)):
                         fname = f"{before.class_type}_method_{before.parent}"
                         code = []
                         self._emit_param_push(before.parent, name=f"self -> ({before.class_type}){before.parent}", code=code)
@@ -1329,9 +1359,10 @@ class TacGenerator(CompiscriptVisitor):
                 tem = getattr(s, "code")
                 if tem:
                     final_code+=tem
+            
             return IRNode(
                 place = suffixes[-1].place,
-                code=final_code
+                code = final_code
             )
         else:
             return IRNode(

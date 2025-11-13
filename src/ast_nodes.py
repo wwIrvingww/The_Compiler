@@ -22,6 +22,7 @@ BOOL: Type = Type("boolean")
 STR: Type = Type("string")
 NULL: Type = Type("null")
 ERROR: Type = Type("error")
+VOID: Type = Type("void")
 
 def type_list(inner_type: Type) -> Type:
     """
@@ -180,6 +181,7 @@ class FuncDecl(ASTNode):
 
 @dataclass
 class Call(ASTNode):
+    name: str = ""
     callee: Identifier = None  # type: ignore
     resolved_sym : Any = None
     args: List[ASTNode] = field(default_factory=list)

@@ -1,3 +1,8 @@
+class Dog{
+    let name : string;
+    function constructor(name: string){
+        this.name = name;
+    }
+}
 
-let arr : integer[];
-arr[0] = 10;
+let d = new Dog("test");

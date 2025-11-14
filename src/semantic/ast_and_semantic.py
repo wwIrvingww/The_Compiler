@@ -220,7 +220,15 @@ class AstAndSemantic(CompiscriptListener):
         self._exit_scope()
 
     def exitVariableDeclaration(self, ctx: CompiscriptParser.VariableDeclarationContext):
-        # Get name        
+        # Check for reserved word "this"
+        identif =  ctx.Identifier()
+        if not identif:
+            self._error(
+                ctx=ctx,
+                msg=f"Identificador faltante al declarar variable."
+            )
+            return
+        # Get name
         name = ctx.Identifier().getText()
         # Save the declaration type (it can be NONE)
         declared = None
@@ -233,6 +241,15 @@ class AstAndSemantic(CompiscriptListener):
         if ctx.initializer():
             init_node = self.ast.get(ctx.initializer())
             init_ty = self.types.get(ctx.initializer(), ERROR)
+        
+        if not declared:
+            if str(init_ty) == "null":
+                # Prohibir variables sin declaracion ni tipo
+                self._error(
+                    ctx=ctx,
+                    msg=f"Variable '{name}' debe tener Inicializador o Tipo"
+                )
+                return
         try:
             self._define_symbol(name, declared or (init_ty if (init_ty != NULL) else None), err_ctx=ctx)
         except Exception as e:
@@ -1093,9 +1110,9 @@ class AstAndSemantic(CompiscriptListener):
         # Usaremos estas variables para validar llamadas a métodos
         last_class_sym = None
         last_prop_name = None
-
         for sfx in suffixes:
             # --- Acceso por punto: '.' Identifier ---
+            
             if isinstance(sfx, CompiscriptParser.PropertyAccessExprContext):
                 prop_name = sfx.Identifier().getText()
                 # 'ty' debe ser el nombre de una clase para poder acceder a atributos/métodos
@@ -1204,7 +1221,7 @@ class AstAndSemantic(CompiscriptListener):
                                 self.errors.append(
                                     f"Argumento {i} invalido en llamada a '{last_prop_name}': esperado {exp}, obtenido {a}"
                                 )
-                    node = Call(name=fname,callee=node, args=arg_nodes, ty=ret)
+                    node = Call(name=msym.name,callee=node, args=arg_nodes, ty=ret)
                     ty = ret
 
                 # Caso 2: llamada a función global, ej. f(...)
@@ -1391,6 +1408,10 @@ class AstAndSemantic(CompiscriptListener):
                 raise
 
     def enterFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
+        # Redefining print check
+        chcount = ctx.getChildCount()
+        if(chcount == 1):
+            return
         name = ctx.Identifier().getText()
         self.current_method = name
 
@@ -1474,6 +1495,16 @@ class AstAndSemantic(CompiscriptListener):
 
 
     def exitFunctionDeclaration(self, ctx: CompiscriptParser.FunctionDeclarationContext):
+        # redefine print check
+        if(ctx.getChildCount() == 1):
+            self._error(
+                ctx,
+                msg=f"Funcion malformada o no reconocida. Estaras redefiniendo 'print'?"
+            )
+            self.ast[ctx] = FuncDecl(ty=ERROR)
+            self.types[ctx] = ERROR
+            return
+        
         name = ctx.Identifier().getText()
         # reconstruir AST del cuerpo y los params si no se ha creado antes
         # obtener tipo de retorno (intentar desde metadata o contexto)

@@ -20,6 +20,7 @@ class TacGenerator(CompiscriptVisitor):
         self.break_stack: List[str] = []
         self.continue_stack: List[str] = []
         self.current_class: Optional[str] = None
+        self.current_class_instance_place: Optional[str] = None
         self.class_methods : List[TACOP] = []
         self.functions: List[TACOP] = []
     # ==============================================================
@@ -719,6 +720,11 @@ class TacGenerator(CompiscriptVisitor):
     # ||  [4] Ternary Expressions (operaciones en general)
     # ==============================================================
     
+    def visitThisExpr(self, ctx):
+        return IRNode(
+            place= "this",
+            code = []
+        )
     def visitTernaryExpr(self, ctx):
         # conditionalExpr: logicalOrExpr ('?' expression ':' expression)?
         if ctx.getChildCount() == 1:
@@ -943,9 +949,12 @@ class TacGenerator(CompiscriptVisitor):
         self._emit_func_define(fname, code)
         # Abrir scope TAC y registrar parámetros como símbolos
         if ctx.parameters():
+            # First check if we have to send 'self'
+            test_sym = self.sem_table.lookup(fname)
+            idx_sum = 0 if test_sym else 1
             for i, pctx in enumerate(ctx.parameters().parameter()):
                 pname = pctx.Identifier().getText()
-                self._emit_load_param(pname, i,code)
+                self._emit_load_param(pname, i+idx_sum,code)
                 # en TAC basta con darlos de alta (tipo opcional)
                 self.tac_table.define(symbol_or_name=pname, sym_type=None, metadata={})
         # Cuerpo
@@ -1028,13 +1037,16 @@ class TacGenerator(CompiscriptVisitor):
         if sem_info:
             ty = sem_info.type
             try: 
-                self._emit_create_array(id=id, code=code)
-                if is_list(ty) and not init:
-                    node = IRAssign(
-                        place=id,
-                        name=id,
-                        code = code
-                    )
+
+                if is_list(ty):
+                    self._emit_create_array(id=id, code=code)
+                    if not init:
+                        node = IRAssign(
+                            place=id,
+                            name=id,
+                            code = code
+                        )
+                    
             except Exception as e:
                 print("ERROR:",e)
         
@@ -1100,6 +1112,45 @@ class TacGenerator(CompiscriptVisitor):
             code = []
             if rhs_ir and rhs_ir.code:
                 code += rhs_ir.code
+
+            if (obj_name=="this"):
+                backup_cls_sym = self.sem_table.lookup_class(self.current_class)
+                cls_atts = getattr(backup_cls_sym, "metadata")["attributes"]
+                at_offset = getattr(cls_atts[prop_name], "metadata")["offset"]
+                
+                # Load self (always sent as param 0)
+                obj_place = None
+                if self.current_class_instance_place: # Ya se cargo
+                    obj_place = self.current_class_instance_place
+                else: # No se ha cargado
+                    obj_place = self._new_temp()
+                    self.current_class_instance_place = obj_place
+                self._emit_comment(
+                    f"Param 0 is reference to 'Self' for {self.current_class}",
+                    code
+                )
+                self._emit_load_param(
+                    dst=obj_place,
+                    idx=0,
+                    code=code
+                )
+                
+                # Store attribute
+                self._emit_store_prop(
+                    obj_place=obj_place,
+                    prop_offset=at_offset,
+                    prop_name=prop_name,
+                    cls_name=self.current_class,
+                    src_place=rhs_ir.place,
+                    code=code
+                )
+                
+                return IRAssign(
+                    place=f"{self.current_class}.{prop_name}",
+                    name=f"{self.current_class}.{prop_name}",
+                    code=code
+                )
+
             cls_name = str(getattr(self.tac_table.lookup(obj_name), "type"))
             att_meta = getattr(self.tac_table.lookup(cls_name), "metadata")["att_meta"]
             offset = getattr(att_meta[prop_name],"metadata")["offset"]
@@ -1138,6 +1189,7 @@ class TacGenerator(CompiscriptVisitor):
     
     def visitAssignExpr(self, ctx):
         # ctx.lhs es un leftHandSide (labeled)
+        
         lhs_node = self.visitLeftHandSide(ctx.lhs, mode="store")                   # debe devolver algo con .place
         rhs_node = self.visit(ctx.assignmentExpr())      # valor a asignar
 
@@ -1236,13 +1288,12 @@ class TacGenerator(CompiscriptVisitor):
         Si hay sufijos, de momento no los transformamos (queda TODO),
         pero devolvemos al menos un IRNode válido para no crashear.
         """
-        # print(ctx)
         base = self.visit(ctx.primaryAtom())
         if base is None:
+            print("Fallback at visitLeftHandSide")
             # fallback ultra-conservador
             name = ctx.getText()
             return IRNode(place=name, code=[])
-        
         suffixes = []
         suffixes.append(base)
         if ctx.suffixOp():
@@ -1280,8 +1331,9 @@ class TacGenerator(CompiscriptVisitor):
                             code=code
                         ))
                     elif (isinstance(before, IRClassMethod)):
-                        fname = f"{before.class_type}_method_{before.parent}"
+                        fname = f"{before.class_type}_method_{before.mname}"
                         code = []
+                        
                         self._emit_param_push(before.parent, name=f"self -> ({before.class_type}){before.parent}", code=code)
                         call_exp = self.visitCallExpr(sop_idx)
                         code += call_exp.code
@@ -1323,13 +1375,24 @@ class TacGenerator(CompiscriptVisitor):
                     # print(base)    
                     
                 if text[0] ==".": # handle for attribute
-                    before = suffixes[-1]              
+                    before = suffixes[-1]
                     instance_name = before.place
-                    instance_sym = self.tac_table.lookup(instance_name)
-                    cls_name = str(getattr(instance_sym, "type"))
-                    cls_sym = getattr(self.tac_table, "lookup_class", None)
-                    cls_sym = cls_sym(cls_name) if callable(cls_sym) else self.sem_table.lookup(cls_name)
-                    cls_att, cls_meth = getattr(cls_sym, "metadata")["att_meta"], getattr(cls_sym, "metadata")["meths_meta"]
+                    instance_sym = None
+                    if (instance_name == "this"): 
+                        instance_name = self.current_class_instance_place
+                        cls_name = self.current_class
+                    else:
+                        instance_sym = self.tac_table.lookup(instance_name)
+                        cls_name = str(getattr(instance_sym, "type"))
+                    cls_sym = self.tac_table.lookup(cls_name)
+                    if cls_sym:
+                        cls_att, cls_meth = getattr(cls_sym, "metadata")["att_meta"], getattr(cls_sym, "metadata")["meths_meta"]
+                    else:
+                        cls_sym = self.sem_table.lookup(cls_name)
+                        cls_att, cls_meth = getattr(cls_sym, "metadata")["attributes"], getattr(cls_sym, "metadata")["methods"]
+                    # cls_sym = getattr(self.tac_table, "lookup_class", None)
+                    # cls_sym = cls_sym(cls_name) if callable(cls_sym) else self.sem_table.lookup(cls_name)
+                    
                     if (text[1:] in cls_att):
                         if mode == "load":
                             offset = getattr(cls_att[text[1:]],"metadata")["offset"]
@@ -1350,7 +1413,7 @@ class TacGenerator(CompiscriptVisitor):
                         suffixes.append(IRClassMethod(
                             place=f"{cls_name}.{text[1:]}",
                             class_type=cls_name,
-                            parent=instance_name,
+                            parent=before.place,
                             mname=text[1:]
                         ))
         final_code = []
@@ -1483,6 +1546,7 @@ class TacGenerator(CompiscriptVisitor):
         
         # restaurar contexto
         self.current_class = prev
+        self.current_class_instance_place = None
 
         if self.class_methods:
             self.class_methods+=out
@@ -1502,6 +1566,7 @@ class TacGenerator(CompiscriptVisitor):
         cls_name = ctx.Identifier().getText()
         cls_sym = self.tac_table.lookup(cls_name)
         
+        
         cls_meta = getattr(cls_sym,"metadata")
  
         # Space to allocate for class
@@ -1510,28 +1575,34 @@ class TacGenerator(CompiscriptVisitor):
         space = cls_meta["size"]*4
         cls_place = self._emit_class_init(cls_name, space, cls_meta["att_meta"], code=out)
         
-        # Attributes init
-        args = None
-        if ctx.arguments():
-            args = self.visit(ctx.arguments())
-
-        att_list = list(cls_meta["att_meta"].keys())
-        # if args:
-            # out += args.code
-            # for i,p in enumerate(args.places):
-            #     # Att name
-            #     att_key = att_list[i]
-            #     cur_att = cls_meta["att_meta"][att_key]
-            #     self._emit_class_att_assign(
-            #         cls=cls_place,
-            #         src=p,
-            #         offset=cur_att.metadata["offset"],
-            #         cname=cls_name,
-            #         aname=cur_att.name,
-            #         code=out
-            #     )
+        # Check for constructor
         
-        # Get metadata
+        constructor = cls_meta["meths_meta"]["constructor"]
+        if constructor:  # Constructor detected!
+            # Fetch arguments sent
+            args = []
+            if ctx.arguments():
+                args = self.visit(ctx.arguments())
+            # Push self
+            self._emit_param_push(
+                cls_place,
+                name=cls_place,
+                code=out
+            )
+            # Push args
+            out += args.code
+            for a in args.places:
+                self._emit_param_push(
+                    place=a,
+                    name=a,
+                    code=out
+                )
+            cls_place = self._emit_call(
+                fname=f"{cls_name}_method_constructor",
+                code=out
+            )
+
+        # Finish
         self._emit_comment(f"finished init {cls_name}", out)
         return IRNode(
             place=cls_place,

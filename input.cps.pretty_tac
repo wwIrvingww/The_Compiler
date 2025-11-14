@@ -1,6 +1,17 @@
+FN Dog_method_constructor
+name = load_param 1
+t0 = name
+	# Param 0 is reference to 'Self' for Dog
+t1 = load_param 0
+t2 = t1 + 0 	# Offset for Dog.name
+*t2 store t0 	# t1.name = t0
 FN main
-CREATE_ARRAY arr
-t2 = t0 * 4
-t3 = arr + t2
-*t3 store t1 	# arr[t0] = t1
-t1 = 10
+	# init Dog
+*t3 = alloc 4 	# Allocating memory for Dog
+push_param t3
+t4 = "test"
+push_param t4
+t5 = call Dog_method_constructor
+	# finished init Dog
+t6 = t5
+d = t6

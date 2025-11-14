@@ -7,6 +7,7 @@ from parser.CompiscriptParser import CompiscriptParser
 from semantic.ast_and_semantic import AstAndSemantic
 from ast_nodes import create_tree_image, render_ascii
 from intermediate.tac_generator import TacGenerator
+from code_generator.pre_analysis import MIPSPreAnalysis
 from symbol_table.runtime_validator import validate_runtime_consistency, dump_runtime_info_json
 from intermediate.cfg import *
 
@@ -92,6 +93,11 @@ def main(argv):
         tac_gen = TacGenerator(sem_listener.table, sem_listener.resolved_symbols)
         # Recorrido del AST (visitor); genera tac y, si corresponde, frames via FrameManager
         tac_gen.visit(tree)
+        print("\n== PRE-ANÁLISIS MIPS ==")
+        # Ejecutar pre-análisis
+        pre_analysis = MIPSPreAnalysis(tac_gen.code, tac_gen.frame_manager)
+        pre_analysis.analyze()
+        pre_analysis.print_summary()
     except Exception as e:
         print(f"[ERROR] Fallo en la generación de TAC: {e}")
         raise

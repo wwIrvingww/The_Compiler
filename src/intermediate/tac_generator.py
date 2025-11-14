@@ -135,12 +135,18 @@ class TacGenerator(CompiscriptVisitor):
 
     # hooks de llamadas
     
-    def _emit_call(self, fname, code: list):
-        t = self._new_temp()
-        code.append(
-            TACOP(op="call", result=t, arg1=fname)
-        )
-        return t
+    def _emit_call(self, fname, code: list,  is_void: bool = False):
+        if is_void:
+            code.append(
+                TACOP(op="call", arg1=fname)
+            )
+            return
+        else:
+            t = self._new_temp()
+            code.append(
+                TACOP(op="call", result=t, arg1=fname)
+            )
+            return t
     
     # def _emit_call(self, fname: str, arg_places: list[str], code: list) -> str:
     #     for p in arg_places:
@@ -952,6 +958,8 @@ class TacGenerator(CompiscriptVisitor):
             # First check if we have to send 'self'
             test_sym = self.sem_table.lookup(fname)
             idx_sum = 0 if test_sym else 1
+            if idx_sum == 1:
+                self._emit_load_param("self", 0, code)
             for i, pctx in enumerate(ctx.parameters().parameter()):
                 pname = pctx.Identifier().getText()
                 self._emit_load_param(pname, i+idx_sum,code)
@@ -1119,21 +1127,16 @@ class TacGenerator(CompiscriptVisitor):
                 at_offset = getattr(cls_atts[prop_name], "metadata")["offset"]
                 
                 # Load self (always sent as param 0)
-                obj_place = None
-                if self.current_class_instance_place: # Ya se cargo
-                    obj_place = self.current_class_instance_place
-                else: # No se ha cargado
-                    obj_place = self._new_temp()
-                    self.current_class_instance_place = obj_place
+                obj_place = "self"
                 self._emit_comment(
                     f"Param 0 is reference to 'Self' for {self.current_class}",
                     code
                 )
-                self._emit_load_param(
-                    dst=obj_place,
-                    idx=0,
-                    code=code
-                )
+                # self._emit_load_param(
+                #     dst=obj_place,
+                #     idx=0,
+                #     code=code
+                # )
                 
                 # Store attribute
                 self._emit_store_prop(
@@ -1379,7 +1382,7 @@ class TacGenerator(CompiscriptVisitor):
                     instance_name = before.place
                     instance_sym = None
                     if (instance_name == "this"): 
-                        instance_name = self.current_class_instance_place
+                        instance_name = "self"
                         cls_name = self.current_class
                     else:
                         instance_sym = self.tac_table.lookup(instance_name)
@@ -1546,7 +1549,6 @@ class TacGenerator(CompiscriptVisitor):
         
         # restaurar contexto
         self.current_class = prev
-        self.current_class_instance_place = None
 
         if self.class_methods:
             self.class_methods+=out
@@ -1575,10 +1577,11 @@ class TacGenerator(CompiscriptVisitor):
         space = cls_meta["size"]*4
         cls_place = self._emit_class_init(cls_name, space, cls_meta["att_meta"], code=out)
         
+        meths_meta = cls_meta.get("meths_meta", {})
+        constructor = meths_meta.get("constructor", None)
         # Check for constructor
-        
-        constructor = cls_meta["meths_meta"]["constructor"]
         if constructor:  # Constructor detected!
+            
             # Fetch arguments sent
             args = []
             if ctx.arguments():
@@ -1597,10 +1600,11 @@ class TacGenerator(CompiscriptVisitor):
                     name=a,
                     code=out
                 )
-            cls_place = self._emit_call(
+            self._emit_call(
                 fname=f"{cls_name}_method_constructor",
-                code=out
-            )
+                code=out,
+                is_void=True
+                )
 
         # Finish
         self._emit_comment(f"finished init {cls_name}", out)

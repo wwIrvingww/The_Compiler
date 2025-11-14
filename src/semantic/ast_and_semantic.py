@@ -85,6 +85,7 @@ class AstAndSemantic(CompiscriptListener):
         self.foreach_item_stack : List[str] = []
         self.frame_manager = FrameManager()
         self.frame_manager.enter_frame("global")
+        self.inside_constructor: bool = False
 
     def _error(self, ctx, msg):
         line = getattr(ctx.start, "line", 1)
@@ -833,6 +834,12 @@ class AstAndSemantic(CompiscriptListener):
     
     def exitReturnStatement(self, ctx: CompiscriptParser.ReturnStatementContext):
         actual_ty = NULL
+        if self.inside_constructor:
+            self._error(
+                ctx=ctx,
+                msg=f"Expresiones de retorno estan prohibidas en constructores de clase"
+            )
+            return
         rn = None
         if ctx.expression():
             rn = self.ast.get(ctx.expression())
@@ -846,7 +853,7 @@ class AstAndSemantic(CompiscriptListener):
             expected = self.func_ret_stack[-1]
             if not compatible(expected, actual_ty):
                 self.errors.append(f"Tipo de retorno incompatible: esperado {expected}, obtenido {actual_ty}")
-
+        
         self.ast[ctx] = ReturnStmt(expr=rn, ty=actual_ty)
 
     def exitArrayLiteral(self, ctx):
@@ -1413,6 +1420,9 @@ class AstAndSemantic(CompiscriptListener):
         if(chcount == 1):
             return
         name = ctx.Identifier().getText()
+        if name=="constructor":
+            self.inside_constructor = True;
+        
         self.current_method = name
 
         # Recolectar params
@@ -1427,16 +1437,15 @@ class AstAndSemantic(CompiscriptListener):
         # Tipo de retorno
         rtxt = _get_type_text_from_ctx(ctx)
         ret  = _parse_type_text(rtxt) or NULL
-
         # metadata de la función/método
         meta = {
             "kind": "func",
             "params": [t for _, t in params],
             "param_names": [n for n, _ in params],
-            "arity": len(params),
-            "ret": ret,
+            "arity": len(params)
         }
-
+        if name!="constructor":
+            meta["ret"] = ret
         # Si estamos dentro de una clase, registrar como método en la metadata de la clase.
         if self.current_class and self._class_frames:
             class_frame = self._class_frames[-1]
@@ -1506,6 +1515,16 @@ class AstAndSemantic(CompiscriptListener):
             return
         
         name = ctx.Identifier().getText()
+        
+        # Constructor out of class check
+        if name == "constructor":
+            if not self.current_class:
+                self._error(
+                    ctx=ctx,
+                    msg=f"Constructor no permitido fuera de una clase"
+                )
+                return
+        
         # reconstruir AST del cuerpo y los params si no se ha creado antes
         # obtener tipo de retorno (intentar desde metadata o contexto)
         rtxt = _get_type_text_from_ctx(ctx)
@@ -1539,6 +1558,7 @@ class AstAndSemantic(CompiscriptListener):
             if body_block is not None and not self._block_guarantees_return(body_block):
                 line = getattr(ctx.start, "line", 1)
                 self.errors.append(f"[linea {line}] falta 'return' en funcion '{name}' de tipo {ret}")
+                
 
         # salir del scope semantic: un solo pop y un solo exit_scope
         if self.func_ret_stack:
@@ -1554,7 +1574,8 @@ class AstAndSemantic(CompiscriptListener):
         except Exception:
             # no queremos que un fallo aquí rompa toda la semántica; registrar si lo deseas
             pass
-
+        if name=="constructor":
+            self.inside_constructor = False
         # limpiar current_method
         # if name == "a":   
         #     self.table.print_table("After A")
@@ -1564,44 +1585,82 @@ class AstAndSemantic(CompiscriptListener):
     
     def enterClassDeclaration(self, ctx: CompiscriptParser.ClassDeclarationContext):
         cls_name = ctx.Identifier(0).getText()
-        self.current_class = cls_name
 
+        parent_name = None
+        if ctx.Identifier(1):
+            parent_name = ctx.Identifier(1).getText()
+        parent_sym = None
+        if (parent_name):
+            parent_sym = self.table.lookup(parent_name)
+        
+        self.current_class = cls_name
         # Pre-registrar la clase en el scope global con metadata vacía
         sym = self.table.scopes[0].get(cls_name)
         if not sym or sym.type != "class":
-            sym = Symbol(cls_name, "class", metadata={"attributes": {}, "methods": {}, "base": None})
-            self.table.scopes[0][cls_name] = sym
+            if (parent_name):
+                meta = getattr(parent_sym, "metadata")
+                atts = meta.get("attributes", {}.copy())
+                meths = meta.get("methods", {}).copy()
+                sym = Symbol(cls_name, "class", metadata={"attributes": atts, "methods": meths, "base": None})
+                self.table.scopes[0][cls_name] = sym
+            else:
+                sym = Symbol(cls_name, "class", metadata={"attributes": {}, "methods": {}, "base": None})
+                self.table.scopes[0][cls_name] = sym
 
         # Abrir un frame para acumular miembros durante el recorrido
-        self._class_frames.append({
-            "name": cls_name,
-            "symbol": sym,
-            "attributes": {},  # name -> Symbol
-            "methods": {},     # name -> Symbol
-        })
+        if(parent_name):
+            meta = getattr(parent_sym, "metadata")
+            atts = meta.get("attributes", {}).copy()
+            meths = meta.get("methods", {}).copy()
+            self._class_frames.append({
+                "name": cls_name,
+                "symbol": sym,
+                "attributes": atts,  # name -> Symbol
+                "methods": meths,     # name -> Symbol
+            })
+        else:
+            self._class_frames.append({
+                "name": cls_name,
+                "symbol": sym,
+                "attributes": {},  # name -> Symbol
+                "methods": {},     # name -> Symbol
+            })
 
     def exitClassDeclaration(self, ctx: CompiscriptParser.ClassDeclarationContext):
         # Nombre de la clase base (si existe)
-        base_tok  = ctx.Identifier(1)
-        base_name = base_tok.getText() if base_tok else None
-
+        cls_name = ctx.Identifier(0)
+        parent_name = None
+        if ctx.Identifier(1):
+            parent_name = ctx.Identifier(1).getText()
+        parent_sym = None
+        if parent_name:
+            parent_sym = self.table.lookup(parent_name)
+            if not parent_sym:
+                self._error(
+                    ctx,
+                    f"Clase padre '{parent_name}' no esta definida para herencia de '{cls_name} : {parent_name}'"
+                )
+                return
         # Cerrar el frame actual
         frame = self._class_frames.pop()
         sym = frame["symbol"]
 
         # Actualizar base en el símbolo
-        sym.metadata["base"] = base_name
+        sym.metadata["base"] = cls_name
+        if parent_name:
+            sym.metadata["parent"] = parent_name
 
         # Crear nodo AST de clase (puedes guardar miembros si quieres)
         self.ast[ctx] = ClassDecl(
             name=frame["name"],
             members=[],  # si quieres, aquí podrías pasar frame["attributes"].values() + frame["methods"].values()
-            ty=Type(frame["name"])
+            ty=Type(frame["name"]),
+            parent=parent_name
         )
 
         # Limpiar contexto actual
         self.current_class = None
-
+ 
         # print("Definiendo clase", frame["name"],
         #     "con atributos", list(frame["attributes"].keys()),
         #     "y métodos", list(frame["methods"].keys()))

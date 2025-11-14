@@ -1,17 +1,20 @@
-FN Dog_method_constructor
-name = load_param 1
-t0 = name
-	# Param 0 is reference to 'Self' for Dog
-t1 = load_param 0
-t2 = t1 + 0 	# Offset for Dog.name
-*t2 store t0 	# t1.name = t0
+FN Animal_method_constructor
+self = load_param 0
+esp = load_param 1
+t0 = esp
+	# Param 0 is reference to 'Self' for Animal
+t1 = self + 0 	# Offset for Animal.especie
+*t1 store t0 	# self.especie = t0
 FN main
 	# init Dog
-*t3 = alloc 4 	# Allocating memory for Dog
+*t2 = alloc 8 	# Allocating memory for Dog
+push_param t2
+t3 = "perro"
 push_param t3
-t4 = "test"
-push_param t4
-t5 = call Dog_method_constructor
+call Dog_method_constructor
 	# finished init Dog
-t6 = t5
-d = t6
+t4 = t2
+d = t4
+t5 = "Terrier"
+t6 = d + 4 	# Offset for Dog.raza
+*t6 store t5 	# d.raza = t5

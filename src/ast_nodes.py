@@ -190,7 +190,7 @@ class Call(ASTNode):
 class ClassDecl(ASTNode):
     name: str = ""
     members: List[ASTNode] = field(default_factory=list)  # FuncDecl, VarDecl, etc.
-
+    parent : Optional[str] = None
 @dataclass
 class MethodDecl(ASTNode):
     name: str = ""

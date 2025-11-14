@@ -83,7 +83,10 @@ class TACOP:
         elif op == "load":
             parts = [str(self.result), "load", f"*{self.arg1}"]
         elif op =="call":
-            parts = [f"{self.result}", "=", "call", f"{self.arg1}"]
+            if self.result:
+                parts = [f"{self.result}", "=", "call", f"{self.arg1}"]
+            else:
+                parts = ["call", f"{self.arg1}"]
         elif op == "len":
             return f"{self.result} = len {self.arg1}"
         elif op == "getidx":

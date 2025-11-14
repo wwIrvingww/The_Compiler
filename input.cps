@@ -1,8 +1,12 @@
-class Dog{
-    let name : string;
-    function constructor(name: string){
-        this.name = name;
+class Animal{
+    var especie: string;
+    function constructor(esp: string){
+        this.especie = esp;
     }
 }
+class Dog: Animal{
+    var raza: string;
+}
 
-let d = new Dog("test");
+let d = new Dog("perro");
+d.raza = "Terrier";

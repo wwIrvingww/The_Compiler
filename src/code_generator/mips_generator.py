@@ -9,7 +9,7 @@ This module uses:
 The goal is to provide a simple but structured translation from a small
 subset of TAC operations to runnable MIPS code for MARS.
 """
-
+import pprint
 from dataclasses import dataclass
 from typing import Dict, List, Set, Tuple, Optional
 
@@ -28,6 +28,7 @@ class FunctionCodegenContext:
     liveness: Dict[int, Set[str]]
     body: List[str]
     reg_alloc: RegisterAllocator
+    param_counter: int = 0
 
 
 class MIPSCodeGenerator:
@@ -44,6 +45,7 @@ class MIPSCodeGenerator:
         self.frame_manager = frame_manager or FrameManager()
         self.pre = MIPSPreAnalysis(tac_code, self.frame_manager)
         self.proc_manager = ProcedureManager(self.frame_manager)
+        
 
     # ------------------------------------------------------------
     # Public API
@@ -63,8 +65,8 @@ class MIPSCodeGenerator:
 
         # 2) Generate body for each function
         for func_name in self.pre.get_all_functions():
+            
             func_tac, frame_info, liveness, _saved_regs = self.pre.get_function_info(func_name)
-
             ctx = FunctionCodegenContext(
                 name=func_name,
                 frame_info=frame_info,
@@ -108,7 +110,7 @@ class MIPSCodeGenerator:
             if tac.op == "=":
                 self._emit_assign(ctx, tac, live_out)
             # Arithmetic
-            elif tac.op in {"+", "-", "*", "/"}:
+            elif tac.op in "+-*/%":
                 self._emit_arithmetic(ctx, tac, live_out)
             # Relational / logical (boolean result in result)
             elif tac.op in {"==", "!=", "<", "<=", ">", ">=", "&&", "||"}:
@@ -122,6 +124,15 @@ class MIPSCodeGenerator:
                 self._emit_if_goto(ctx, tac, live_out)
             elif tac.op == "return":
                 self._emit_return(ctx, tac, live_out)
+            # Parameters push
+            elif tac.op == "push_param":
+                self._emit_push_param(ctx, tac, live_out)
+            elif tac.op == "load_param":
+                self._emit_load_param(ctx, tac, live_out)
+            elif tac.op == "print":
+                self._emit_print(ctx, tac, live_out)
+            elif tac.op == "call":
+                self._emit_call(ctx, tac, live_out)
             else:
                 # For unsupported ops, emit a comment so it is visible in output.
                 ctx.body.append(f"    # TODO: unsupported TAC op {tac.op} ({tac})")
@@ -143,6 +154,7 @@ class MIPSCodeGenerator:
     # ------------------------------------------------------------
     # Emitters
     # ------------------------------------------------------------
+
 
     def _emit_assign(self, ctx: FunctionCodegenContext, tac: TACOP, live_out: Set[str]) -> None:
         dest = tac.result
@@ -175,6 +187,82 @@ class MIPSCodeGenerator:
             ctx.body.append(f"    move {dest_reg}, {src_reg}    # {dest} = {src}")
         ctx.reg_alloc.mark_written(dest_reg)
 
+    def _emit_push_param(self, ctx, tac, live_out):
+        pcount = ctx.param_counter
+        if pcount < 4:
+            src = tac.result
+            dest = f"$a{pcount}"
+            
+            if self._is_int_literal(src):
+                reg, pre = ctx.reg_alloc.get_register_for(f"param[{pcount}]", live_out, for_read=False, for_write=True)
+                ctx.body.extend(pre)
+                ctx.body.append(f"    li {reg}, {src}    # param[{pcount}] ={src}")
+                ctx.reg_alloc.mark_written(reg)
+                ctx.body.append(f"    move {dest}, {reg}")
+                ctx.param_counter+=1
+                return
+            if src in ("true", "false"):
+                val = "1" if src == "true" else "0"
+                reg, pre = ctx.reg_alloc.get_register_for(f"param[{pcount}]", live_out, for_read=False, for_write=True)
+                ctx.body.extend(pre)
+                ctx.body.append(f"    li {reg}, {val}    # param[{pcount}] = {src}")
+                ctx.reg_alloc.mark_written(reg)
+                ctx.body.append(f"    move {dest}, {reg}")
+                ctx.param_counter+=1
+                return
+
+            # Case 2: move between variables/temporaries
+            src_reg, pre1 = ctx.reg_alloc.get_register_for(src, live_out, for_read=True, for_write=False)
+            ctx.body.extend(pre1)
+            if src_reg != dest:
+                ctx.body.append(f"    move {dest}, {src_reg}    # param[{pcount}] = {src}")
+            ctx.param_counter+=1
+        else:
+            ctx.body.append(f"    # TODO: params >4 go with stack")    
+        
+    def _emit_load_param(self, ctx, tac, live_out):
+        dest = tac.result
+        param_idx = int(tac.arg1)
+        if param_idx < 4:
+            dest_reg, pre1 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=True, for_write=False)
+            ctx.body.extend(pre1)
+            ctx.body.append(f"    move {dest_reg}, $a{param_idx}    # {dest_reg} = param[{param_idx}]")
+            ctx.body.append(f"    sw $a{param_idx}, {param_idx*4 + 8}($sp)")
+        else:
+            ctx.body.append(f"    # TODO: params >4 go with stack")    
+        
+        
+    def _emit_call(self, ctx, tac, live_out):
+        fname = tac.arg1
+        dest = tac.result
+        ctx.body.append(
+            f"    jal {fname}   # call {fname}()"
+        )
+        if dest:
+            dest_reg, pre1 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=True, for_write=False)
+            ctx.body.extend(pre1)
+            ctx.body.append(f"    move {dest_reg}, $v0    # ret of {fname}()")
+        ctx.param_counter=0
+        
+    def _emit_print(self, ctx, tac, live_out):
+        src = tac.arg1
+        src_reg, pre1 = ctx.reg_alloc.get_register_for(
+            src,
+            live_out,
+            for_read=True,
+            for_write=False
+        )
+        
+        ctx.body.extend(pre1)
+        ctx.body.append(f"    li $v0, 1    # print int")
+        ctx.body.append(f"    move $a0, {src_reg}    # print({src_reg})")
+        ctx.body.append(f"    syscall")
+            # src = tac.arg1
+            # preg, pre = ctx.reg_alloc.get_register_for(src, live_out, for_read=True, for_write=False)
+            # ctx.body.append(
+            #     f"    li {preg}, $v0    # ret of {fname}()"
+            # )
+    
     def _emit_arithmetic(self, ctx: FunctionCodegenContext, tac: TACOP, live_out: Set[str]) -> None:
         op = tac.op
         a = tac.arg1
@@ -189,6 +277,21 @@ class MIPSCodeGenerator:
             "*": "mul",
             "/": "div",  # MARS acepta 'div rd, rs, rt' como pseudoinstrucción
         }
+        
+        if (op == "%"):
+            reg_a, pre1 = ctx.reg_alloc.get_register_for(a, live_out, for_read=True, for_write=False)
+            reg_b, pre2 = ctx.reg_alloc.get_register_for(b, live_out, for_read=True, for_write=False)
+            reg_dest, pre3 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
+
+            ctx.body.extend(pre1)
+            ctx.body.extend(pre2)
+            ctx.body.extend(pre3)
+
+            ctx.body.append(f"    div {reg_dest}, {reg_a}, {reg_b}    # {a}%{b}")
+            ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
+            ctx.reg_alloc.mark_written(reg_dest)
+            return
+            
         mips_op = op_map[op]
 
         reg_a, pre1 = ctx.reg_alloc.get_register_for(a, live_out, for_read=True, for_write=False)

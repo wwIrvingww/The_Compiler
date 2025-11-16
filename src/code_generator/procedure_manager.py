@@ -5,9 +5,10 @@ Responsabilidad: Generar prólogos y epílogos de funciones en MIPS
 - EPÍLOGO: Restaurar registros, liberar stack, retornar
 """
 
+import pprint
 from typing import List, Set, Optional
 from dataclasses import dataclass
-
+from symbol_table.runtime_layout import FrameManager
 
 @dataclass
 class FrameInfo:
@@ -17,7 +18,7 @@ class FrameInfo:
     param_count: int = 0         # Número de parámetros
     uses_saved_regs: Set[str] = None  # $s0-$s7 usados
     max_call_args: int = 0       # Máximo args en llamadas internas
-    
+    fsize : int = 0
     def __post_init__(self):
         if self.uses_saved_regs is None:
             self.uses_saved_regs = set()
@@ -77,22 +78,28 @@ class ProcedureManager:
         
         if self.frame_manager:
             try:
-                # Intentar obtener frame del FrameManager
-                frame = self.frame_manager.get_frame(func_name)
+                # Intentar obtener frame del FrameManager]
+                self.frame_manager.enter_frame(func_name)
+                frame = self.frame_manager.current_frame()
                 if frame:
                     # Calcular tamaño de locales
                     local_size = 0
                     param_count = 0
-                    
-                    for sym_name, slot in frame.symbols.items():
-                        if slot.category == "local":
-                            local_size += slot.size
-                        elif slot.category == "param":
-                            param_count += 1
+
+                    fparams = frame.params
+                    flocals = frame.locals
+                    for sym_name, slot in fparams.items():
+                        param_count += 1
+                    for sym_name, slot in flocals.items():
+                        local_size+= slot[1]
                     
                     frame_info.local_size = local_size
                     frame_info.param_count = param_count
-            except Exception:
+                    frame_info.fsize = local_size + (4*param_count)
+                    
+                self.frame_manager.exit_frame()
+            except Exception as e:
+                print(e)
                 # Si falla, usar defaults (frame vacío)
                 pass
         
@@ -121,29 +128,29 @@ class ProcedureManager:
             Lista de instrucciones MIPS (strings)
         """
         if frame_info is None:
-            frame_info = self.get_frame_info(func_name)
-        
+            frame_info: FrameInfo = self.get_frame_info(func_name)
         code = []
         
+        eff_size = frame_info.fsize + 8 # 8 por ra y fp
         # Etiqueta de la función
         code.append(f"{func_name}:")
         code.append(f"    # === PRÓLOGO {func_name} ===")
         
         # 1. Guardar $ra y $fp (8 bytes totales)
-        code.append("    # Guardar $ra y $fp")
-        code.append("    addiu $sp, $sp, -8")
-        code.append("    sw $ra, 4($sp)")
-        code.append("    sw $fp, 0($sp)")
+        # code.append("    # Guardar $ra y $fp")
+        code.append(f"    addiu $sp, $sp, -{eff_size}")
+        code.append(f"    sw $ra, 0($sp)")
+        code.append(f"    sw $fp, 4($sp)")
         
         # 2. Establecer nuevo frame pointer
-        code.append("    # Establecer nuevo frame pointer")
+        # code.append("    # Establecer nuevo frame pointer")
         code.append("    move $fp, $sp")
         
         # 3. Reservar espacio para locales + registros salvados
-        total_space = frame_info.total_frame_size
-        if total_space > 0:
-            code.append(f"    # Reservar espacio: {frame_info.local_size} bytes locales + {frame_info.saved_regs_size} bytes $s")
-            code.append(f"    addiu $sp, $sp, -{total_space}")
+        # total_space = frame_info.total_frame_size
+        # if total_space > 0:
+        #     code.append(f"    # Reservar espacio: {frame_info.local_size} bytes locales + {frame_info.saved_regs_size} bytes $s")
+        #     code.append(f"    addiu $sp, $sp, -{total_space}")
         
         # 4. Guardar registros $s0-$s7 si se usan
         if frame_info.uses_saved_regs:
@@ -201,23 +208,25 @@ class ProcedureManager:
                 offset += 4
         
         # 2. Liberar espacio de locales
-        total_space = frame_info.total_frame_size
-        if total_space > 0:
-            code.append(f"    # Liberar espacio del frame ({total_space} bytes)")
-            code.append(f"    addiu $sp, $sp, {total_space}")
+        
+        # print(eff_size)
+        # if eff_size > 0:
+        #     code.append(f"    # Liberar espacio del frame ({eff_size} bytes)")
+        #     code.append(f"    addiu $sp, $sp, {eff_size}")
         
         # 3. Restaurar $ra y $fp
-        code.append("    # Restaurar $ra y $fp del caller")
-        code.append("    lw $ra, 4($sp)")
-        code.append("    lw $fp, 0($sp)")
-        code.append("    addiu $sp, $sp, 8")
+        eff_size = frame_info.fsize + 8 
+        # code.append("    # Restaurar $ra y $fp del caller")
+        code.append("    lw $fp, 4($sp)")
+        code.append("    lw $ra, 0($sp)")
+        code.append(f"    addiu $sp, $sp, {eff_size}")
         
         # 4. Retornar
-        if has_return_value:
-            code.append("    # Retornar (valor en $v0)")
-        else:
-            code.append("    # Retornar")
-        code.append("    jr $ra")
+        # if has_return_value:
+        #     code.append("    # Retornar (valor en $v0)")
+        # else:
+        #     code.append("    # Retornar")
+        code.append("    jr $ra\t# ret en $v0")
         code.append(f"    # === FIN EPÍLOGO {func_name} ===")
         code.append("")
         

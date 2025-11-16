@@ -1,20 +1,40 @@
-FN Animal_method_constructor
-self = load_param 0
-esp = load_param 1
-t0 = esp
-	# Param 0 is reference to 'Self' for Animal
-t1 = self + 0 	# Offset for Animal.especie
-*t1 store t0 	# self.especie = t0
-FN main
-	# init Dog
-*t2 = alloc 8 	# Allocating memory for Dog
-push_param t2
-t3 = "perro"
-push_param t3
-call Dog_method_constructor
-	# finished init Dog
-t4 = t2
-d = t4
-t5 = "Terrier"
-t6 = d + 4 	# Offset for Dog.raza
-*t6 store t5 	# d.raza = t5
+FN func_fib
+n = load_param 0
+t0 = n
+t1 = 1
+t2 = t0 <= t1
+if t2 goto L0
+goto L1
+label L0
+t3 = n
+return t3
+goto L2
+label L1
+t4 = n
+t5 = 1
+t6 = t4 - t5
+push_param t6
+t7 = call func_fib
+t8 = t7
+t9 = n
+t10 = 2
+t11 = t9 - t10
+push_param t11
+t12 = call func_fib
+t13 = t12
+t14 = t8 + t13
+val = t14
+t15 = val
+print t15
+t16 = val
+return t16
+goto L2
+label L2
+FN func_main
+t17 = 10
+push_param t17
+t18 = call func_fib
+t19 = t18
+ret = t19
+t20 = ret
+print t20

@@ -1,12 +1,13 @@
-class Animal{
-    var especie: string;
-    function constructor(esp: string){
-        this.especie = esp;
+function fib(n: integer): integer{
+    if (n <= 1){
+        return n;
+    }
+    else{
+        let val = fib(n-1) + fib(n-2);
+        print(val);
+        return val;
     }
 }
-class Dog: Animal{
-    var raza: string;
-}
 
-let d = new Dog("perro");
-d.raza = "Terrier";
+let ret = fib(10);
+print(ret);

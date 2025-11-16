@@ -6,7 +6,7 @@ from symbol_table import SymbolTable
 from intermediate.labels import LabelGenerator
 from intermediate.temps import TempAllocator
 from symbol_table.runtime_layout import FrameManager
-
+import pprint
 class TacGenerator(CompiscriptVisitor):
     def __init__(self, symbol_table, resolved):
         self.resolved_symbols = resolved
@@ -19,6 +19,7 @@ class TacGenerator(CompiscriptVisitor):
         self.const_scopes: List[set] = [set()]
         self.break_stack: List[str] = []
         self.continue_stack: List[str] = []
+        self.current_function = "main"
         self.current_class: Optional[str] = None
         self.current_class_instance_place: Optional[str] = None
         self.class_methods : List[TACOP] = []
@@ -388,7 +389,7 @@ class TacGenerator(CompiscriptVisitor):
     def visitProgram(self, ctx):
         stmts = ctx.statement()
         code = [TACOP(
-            op="fn_decl", result="main"
+            op="fn_decl", result="func_main"
         )]
         for st in stmts:
             tem_node = self.visit(st)
@@ -399,7 +400,7 @@ class TacGenerator(CompiscriptVisitor):
         final_code = self.peephole(final_code)
         
         self.code = final_code
-        self.dump_runtime_info()
+        # self.dump_runtime_info()
         return IRNode(code=final_code)
     
     def visitStatement(self, ctx):
@@ -950,6 +951,9 @@ class TacGenerator(CompiscriptVisitor):
         """
         fname = ctx.Identifier().getText()
         self._enter_scope()
+        
+        self.current_function = fname
+        self.frame_manager.enter_frame(fname)
         # Lentry, Lexit = self._func_labels(fname)
         code = []
         self._emit_func_define(fname, code)
@@ -960,8 +964,10 @@ class TacGenerator(CompiscriptVisitor):
             idx_sum = 0 if test_sym else 1
             if idx_sum == 1:
                 self._emit_load_param("self", 0, code)
+                self.frame_manager.allocate_param(f"func_{fname}", "self", "", 4)
             for i, pctx in enumerate(ctx.parameters().parameter()):
                 pname = pctx.Identifier().getText()
+                self.frame_manager.allocate_param(f"func_{fname}", pname, "func", 4)
                 self._emit_load_param(pname, i+idx_sum,code)
                 # en TAC basta con darlos de alta (tipo opcional)
                 self.tac_table.define(symbol_or_name=pname, sym_type=None, metadata={})
@@ -974,6 +980,8 @@ class TacGenerator(CompiscriptVisitor):
 
         self.functions+=code
         self._exit_scope()
+        self.frame_manager.exit_frame()
+        self.current_function = "main"
         # self.tac_table.define(
             
         # )
@@ -1072,7 +1080,8 @@ class TacGenerator(CompiscriptVisitor):
         frame_id = self.frame_manager.current_frame_id()
         if frame_id:
             size = self.frame_manager.size_of_type(getattr(ty, "name", None))
-            self.frame_manager.allocate_local(frame_id, id, type_name=getattr(ty, "name", None), size=size)
+            if (self.current_function !="main"):
+                self.frame_manager.allocate_local(frame_id, id, type_name=getattr(ty, "name", None), size=size)
         self.tac_table.define(
             symbol_or_name=id,
             sym_type=ty,
@@ -1341,6 +1350,7 @@ class TacGenerator(CompiscriptVisitor):
                         call_exp = self.visitCallExpr(sop_idx)
                         code += call_exp.code
                         # print(f"calling {fname}")
+                        
                         ret_place = self._emit_call(fname=fname, code=code)
                         # Calling class method
                         suffixes.append(IRNode(
@@ -1364,7 +1374,14 @@ class TacGenerator(CompiscriptVisitor):
                             code += call_exp.code
                         # call_exp = self.visitCallExpr(sop_idx)
                         # code += call_exp.code
+                        
                         ret_place = self._emit_call(fname=f"func_{fname}", code=code)
+                        if (self.current_function !="main"):
+                            self.frame_manager.allocate_local(
+                                f"func_{fname}",
+                                ret_place,
+                                size=4
+                            )
                         suffixes.append(
                             IRNode(
                             place=ret_place,
@@ -1631,8 +1648,9 @@ class TacGenerator(CompiscriptVisitor):
         print("\n== RUNTIME FRAMES ==")
         for fid, frame in self.frame_manager._frames.items():
             print(f"Frame '{fid}':")
-            for name, slot in frame.symbols.items():
-                print(f"   {name:10s} offset={slot.offset:3d} size={slot.size:2d} type={slot.type_name}")
+            pprint.pprint(frame.summary())
+            # for name, slot in frame.symbols.items():
+            #     print(f"   {name:10s} offset={slot.offset:3d} size={slot.size:2d} type={slot.type_name}")
 
 
 

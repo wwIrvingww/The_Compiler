@@ -8,6 +8,7 @@ from semantic.ast_and_semantic import AstAndSemantic
 from ast_nodes import create_tree_image, render_ascii
 from intermediate.tac_generator import TacGenerator
 from code_generator.pre_analysis import MIPSPreAnalysis
+from code_generator.mips_generator import MIPSCodeGenerator
 from symbol_table.runtime_validator import validate_runtime_consistency, dump_runtime_info_json
 from intermediate.cfg import *
 
@@ -93,11 +94,17 @@ def main(argv):
         tac_gen = TacGenerator(sem_listener.table, sem_listener.resolved_symbols)
         # Recorrido del AST (visitor); genera tac y, si corresponde, frames via FrameManager
         tac_gen.visit(tree)
-        print("\n== PRE-ANÁLISIS MIPS ==")
+        print("\n== MIPS GENERATION ==")
+        
+        mips_gen = MIPSCodeGenerator(tac_gen.code, tac_gen.frame_manager)
+        asm_str = mips_gen.generate()
+        # print(asm_str)
+        with open(f"{input_path}.asm", "w") as pp:
+            pp.write(asm_str)
         # Ejecutar pre-análisis
-        pre_analysis = MIPSPreAnalysis(tac_gen.code, tac_gen.frame_manager)
-        pre_analysis.analyze()
-        pre_analysis.print_summary()
+        # pre_analysis = MIPSPreAnalysis(tac_gen.code, tac_gen.frame_manager)
+        # pre_analysis.analyze()
+        # pre_analysis.print_summary()
     except Exception as e:
         print(f"[ERROR] Fallo en la generación de TAC: {e}")
         raise
@@ -111,23 +118,23 @@ def main(argv):
     # Aquí integramos el validador que verifica consistencia SymbolTable <-> FrameManager.
     # Se ejecuta justo después de generar el TAC y antes de terminar el driver.
     # -------------------------
-    try:
-        errors = validate_runtime_consistency(sem_listener.table, tac_gen.frame_manager)
-        if errors:
-            print("\n== RUNTIME VALIDATION ERRORS ==")
-            for er in errors:
-                print("•", er)
-        else:
-            pass
-            # print("\n[OK] Runtime layout: validación pasada (no se detectaron inconsistencias).")
-        # Además volcamos JSON con la estructura de frames (útil para el IDE)
-        frames_json = dump_runtime_info_json(tac_gen.frame_manager)
-        out_json = f"{input_path}.frames.json"
-        with open(out_json, "w", encoding="utf-8") as f:
-            f.write(frames_json)
-        print(f"[INFO] Frames JSON escrito: {out_json}")
-    except Exception as e:
-        print(f"[WARN] No se pudo validar layout runtime: {e}")
+    # try:
+    #     errors = validate_runtime_consistency(sem_listener.table, tac_gen.frame_manager)
+    #     if errors:
+    #         print("\n== RUNTIME VALIDATION ERRORS ==")
+    #         for er in errors:
+    #             print("•", er)
+    #     else:
+    #         pass
+    #         # print("\n[OK] Runtime layout: validación pasada (no se detectaron inconsistencias).")
+    #     # Además volcamos JSON con la estructura de frames (útil para el IDE)
+    #     frames_json = dump_runtime_info_json(tac_gen.frame_manager)
+    #     out_json = f"{input_path}.frames.json"
+    #     with open(out_json, "w", encoding="utf-8") as f:
+    #         f.write(frames_json)
+    #     print(f"[INFO] Frames JSON escrito: {out_json}")
+    # except Exception as e:
+    #     print(f"[WARN] No se pudo validar layout runtime: {e}")
 
     # 4) Emitir TAC en consola (opcional: tac_gen ya pudo haber impreso o escrito archivos)
     
@@ -140,7 +147,7 @@ def main(argv):
             pretty_tac+=f"\n\t{str(taco)}"
         else:
             pretty_tac+=f"\n\t\t{str(taco)}"
-    print(pretty_tac)
+    # print(pretty_tac)
     
     
     

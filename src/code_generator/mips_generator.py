@@ -31,17 +31,31 @@ class FunctionCodegenContext:
     param_counter: int = 0
 
 def _gen_offsets_from_tac(code: List[TACOP])->Dict[str,int]:
-    rslts = []
+    
+    # Save
+    func_vars = {}
+    last = "main"
     for t in code:
-        if t.op not in ("fn_decl", "label") and t.result:
-            rslts.append(t.result)
-    rslts = list(set(rslts)) # no repeats
-    var_offsets = {}
-    offset = -8
-    for r in rslts:
-        var_offsets[r] = offset
-        offset-=4
-    return var_offsets
+        if t.op == "fn_decl":
+            last = t.result
+            func_vars[last] = []
+            continue
+        if t.op != "label" and t.result:
+            func_vars[last].append(t.result)
+    # No repeats
+    for k in func_vars.keys():
+        func_vars[k] = list(set(func_vars[k]))
+    
+    # Generate offset -8, -12, -16 ...
+    func_offsets = {}
+    for k in func_vars.keys():
+        func_offsets[k] = {}
+        offset = -8
+        for v in func_vars[k]:
+            func_offsets[k][v] = offset
+            offset-=4
+
+    return func_offsets
     
         
 class MIPSCodeGenerator:
@@ -58,7 +72,6 @@ class MIPSCodeGenerator:
         self.frame_manager = frame_manager or FrameManager()
         self.pre = MIPSPreAnalysis(tac_code, self.frame_manager)
         self.proc_manager = ProcedureManager(self.frame_manager)
-        
 
     # ------------------------------------------------------------
     # Public API
@@ -79,7 +92,6 @@ class MIPSCodeGenerator:
         # 2) Generate body for each function
         for func_name in self.pre.get_all_functions():
             func_tac, frame_info, liveness, _saved_regs = self.pre.get_function_info(func_name)
-            max_liv = 0
             var_offsets = _gen_offsets_from_tac(func_tac)
             ctx = FunctionCodegenContext(
                 name=func_name,
@@ -88,7 +100,7 @@ class MIPSCodeGenerator:
                 body=[],
                 reg_alloc=RegisterAllocator(
                     base_pointer="$fp",
-                    var_offsets=var_offsets)
+                    var_offsets=var_offsets[func_name])
             )
 
             self._generate_function_body(ctx, func_tac)
@@ -101,6 +113,7 @@ class MIPSCodeGenerator:
             functions=functions_payload,
             data_section=self.pre.data_section,
             procedure_manager=self.proc_manager,
+            var_offsets=var_offsets
         )
         return asm_text
 

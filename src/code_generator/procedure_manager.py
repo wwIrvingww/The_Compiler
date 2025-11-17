@@ -109,7 +109,8 @@ class ProcedureManager:
     def generate_prologue(
         self, 
         func_name: str, 
-        frame_info: Optional[FrameInfo] = None
+        frame_info: Optional[FrameInfo] = None,
+        max_offset:int = 0
     ) -> List[str]:
         """
         Genera el prólogo de una función en MIPS.
@@ -132,7 +133,7 @@ class ProcedureManager:
             
         code = []
         
-        eff_size = frame_info.fsize + 8 # 8 por ra y fp
+        eff_size = frame_info.fsize + 8 +abs(max_offset)# 8 por ra y fp
         # Etiqueta de la función
         code.append(f"{func_name}:")
         code.append(f"    # === PRÓLOGO {func_name} ===")
@@ -172,7 +173,8 @@ class ProcedureManager:
         self, 
         func_name: str, 
         frame_info: Optional[FrameInfo] = None,
-        has_return_value: bool = False
+        has_return_value: bool = False,
+        max_offset: int = 0
     ) -> List[str]:
         """
         Genera el epílogo de una función en MIPS.
@@ -216,7 +218,7 @@ class ProcedureManager:
         #     code.append(f"    addiu $sp, $sp, {eff_size}")
         
         # 3. Restaurar $ra y $fp
-        eff_size = frame_info.fsize + 8 
+        eff_size = frame_info.fsize + 8 + abs(max_offset)
         # code.append("    # Restaurar $ra y $fp del caller")
         code.append("    lw $fp, 4($sp)")
         code.append("    lw $ra, 0($sp)")
@@ -238,7 +240,8 @@ class ProcedureManager:
         func_name: str,
         body_instructions: List[str],
         frame_info: Optional[FrameInfo] = None,
-        has_return: bool = False
+        has_return: bool = False,
+        var_offsets = None
     ) -> List[str]:
         """
         Genera una función completa (prólogo + cuerpo + epílogo).
@@ -254,9 +257,14 @@ class ProcedureManager:
             Lista completa de instrucciones MIPS
         """
         code = []
-        
         # Prólogo
-        code.extend(self.generate_prologue(func_name, frame_info))
+        if (var_offsets):
+            offs = var_offsets[func_name]
+            
+            max_offset = 0
+            for k in offs.keys():
+                max_offset = min(max_offset, offs[k])  
+        code.extend(self.generate_prologue(func_name, frame_info, max_offset))
         
         # Cuerpo
         if body_instructions:
@@ -265,7 +273,7 @@ class ProcedureManager:
             code.append("")
         
         # Epílogo
-        code.extend(self.generate_epilogue(func_name, frame_info, has_return))
+        code.extend(self.generate_epilogue(func_name, frame_info, has_return, max_offset))
         
         return code
     
@@ -357,7 +365,8 @@ def visualize_frame_layout(frame_info: FrameInfo) -> str:
 def generate_asm_file(
     functions: List[tuple],  # [(func_name, body_instructions, has_return)]
     data_section: List[str] = None,
-    procedure_manager: ProcedureManager = None
+    procedure_manager: ProcedureManager = None,
+    var_offsets = None
 ) -> str:
     """
     Genera un archivo .asm completo con múltiples funciones.
@@ -388,7 +397,7 @@ def generate_asm_file(
     # Funciones
     for func_name, body, has_return in functions:
         func_code = procedure_manager.generate_simple_function(
-            func_name, body, has_return=has_return
+            func_name, body, has_return=has_return, var_offsets=var_offsets,
         )
         lines.extend(func_code)
         lines.append("")

@@ -167,9 +167,11 @@ class MIPSCodeGenerator:
                 self._emit_print(ctx, tac, live_out, True)
             elif tac.op == "call":
                 self._emit_call(ctx, tac, live_out)
-            # Arrays
+            # Arrays and clases
             elif tac.op == "CREATE_ARRAY":
                 self._emit_create_array(ctx, tac, live_out)
+            elif tac.op == "alloc":
+                self._emit_alloc(ctx, tac, live_out)
             elif tac.op == "load":
                 self._emit_load(ctx, tac, live_out)
             elif tac.op == "store":
@@ -204,13 +206,14 @@ class MIPSCodeGenerator:
         if dest is None or src is None:
             return
 
-        # Case 1: literal integer or boolean
+        # Case 1: literal, integer or boolean
         if self._is_int_literal(src):
             reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
             ctx.body.extend(pre)
             ctx.body.append(f"    li {reg}, {src}    # {dest} = {src}")
             ctx.reg_alloc.mark_written(reg)
             return
+        
         if src in ("true", "false"):
             val = "1" if src == "true" else "0"
             reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
@@ -218,17 +221,36 @@ class MIPSCodeGenerator:
             ctx.body.append(f"    li {reg}, {val}    # {dest} = {src}")
             ctx.reg_alloc.mark_written(reg)
             return
-        if src.startswith('"'):
-            # No tocamos el RegisterAllocator para este temp: no nos interesa
-            # que las cadenas entren al juego de liveness y reasignación.
+        
+        # if src.startswith('"'):
+        #     # No tocamos el RegisterAllocator para este temp: no nos interesa
+        #     # que las cadenas entren al juego de liveness y reasignación.
+        #     data_info = self.pre.str_encoder.get(src)
+        #     if data_info is None:
+        #         ctx.body.append(f"    # WARNING: string literal {src} no encontrado en str_encoder")
+        #         return
+        #     data_label = data_info["id"]
+        #     self.string_temps[dest] = data_label
+        #     ctx.body.append(f"    # {dest} = (str){src} -> {data_label}")
+        #     return
+
+        if isinstance(src, str) and src.startswith('"'):
             data_info = self.pre.str_encoder.get(src)
             if data_info is None:
                 ctx.body.append(f"    # WARNING: string literal {src} no encontrado en str_encoder")
                 return
+            
             data_label = data_info["id"]
             self.string_temps[dest] = data_label
-            ctx.body.append(f"    # {dest} = (str){src} -> {data_label}")
+            # Emitimos la carga de la dirección de la cadena en dest
+            reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
+            ctx.body.extend(pre)
+            ctx.body.append(f"    la {reg}, {data_label}     # {dest} = &{src}")
+            ctx.reg_alloc.mark_written(reg)
             return
+
+
+
         # Case 2: move between variables/temporaries
         src_reg, pre1 = ctx.reg_alloc.get_register_for(src, live_out, for_read=True, for_write=False)
         dest_reg, pre2 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
@@ -273,7 +295,7 @@ class MIPSCodeGenerator:
             ctx.param_counter+=1
         else:
             ctx.body.append(f"    # TODO: params >4 go with stack")    
-        
+    
     def _emit_load_param(self, ctx, tac, live_out):
         dest = tac.result
         param_idx = int(tac.arg1)
@@ -281,7 +303,7 @@ class MIPSCodeGenerator:
             dest_reg, pre1 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=True, for_write=False)
             ctx.body.extend(pre1)
             ctx.body.append(f"    move {dest_reg}, $a{param_idx}    # {dest_reg} = param[{param_idx}]")
-            ctx.body.append(f"    sw $a{param_idx}, {param_idx*4 + 8}($sp)")
+            ctx.reg_alloc.mark_written(dest_reg)
         else:
             ctx.body.append(f"    # TODO: params >4 go with stack")    
         
@@ -315,6 +337,36 @@ class MIPSCodeGenerator:
         ctx.body.append(f"    # == END CREATE ARRAY == #\n")
         ctx.reg_alloc.mark_written(dest_reg)
         
+    def _emit_alloc(self, ctx: FunctionCodegenContext, tac: TACOP, live_out: Set[str]) -> None:
+        """
+        alloc result, arg1
+        arg1: número de bytes a reservar
+        result: puntero devuelto por sbrk (syscall 9)
+        """
+        
+        dest = tac.result
+        size = tac.arg1
+        if dest is None or size is None:
+            return
+        
+        if self._is_int_literal(size):
+            ctx.body.append(f"    li $a0, {size}    # bytes a reservar")
+        else:
+            size_reg, pre1 = ctx.reg_alloc.get_register_for(size, live_out, for_read=True, for_write=False)
+            ctx.body.extend(pre1)
+            ctx.body.append(f"    move $a0, {size_reg}    # bytes a reservar ({size})")
+
+        # Llamar a sbrk
+        ctx.body.append("    li $v0, 9    # sbrk - alloc")
+        ctx.body.append("    syscall")
+
+        # Guardar puntero en 'dest'
+        dest_reg, pre2 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
+        ctx.body.extend(pre2)
+        ctx.body.append(f"    move {dest_reg}, $v0    # {dest} = puntero objeto")
+        ctx.reg_alloc.mark_written(dest_reg)
+
+    
     def _emit_load(self, ctx, tac, live_out):
         src_addr = tac.arg1
         dest = tac.result   

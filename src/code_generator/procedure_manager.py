@@ -258,12 +258,17 @@ class ProcedureManager:
         """
         code = []
         # Prólogo
-        if (var_offsets):
-            offs = var_offsets[func_name]
-            
-            max_offset = 0
-            for k in offs.keys():
-                max_offset = min(max_offset, offs[k])  
+        max_offset = 0
+
+        # Si nos pasaron var_offsets, intentamos usar los de ESTA función
+        if var_offsets:
+            offs = var_offsets.get(func_name)
+            if offs:
+                # offs es un dict {var_name: offset}
+                max_offset = 0
+                for off in offs.values():
+                    max_offset = min(max_offset, off)
+        
         code.extend(self.generate_prologue(func_name, frame_info, max_offset))
         
         # Cuerpo

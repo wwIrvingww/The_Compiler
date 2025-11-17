@@ -954,14 +954,29 @@ class TacGenerator(CompiscriptVisitor):
         """
         print '(' expression ')' ';'
         """
+        expr_ctx = ctx.expression()
         val = self.visit(ctx.expression())
         
         code = []
         if val and val.code:
             code += val.code
+
+        if not val or not val.code:
+            return IRNode(code=code)
         
-        possible_val = val.code[-1].arg1
-        if (possible_val.startswith('"')):
+        last = val.code[-1]
+        expr_text = expr_ctx.getText()
+
+        if last.op == "+" and '"' in expr_text:
+            left = last.arg1
+            right = last.arg2
+
+            code.append(TACOP(op="print_s", arg1=left))
+            code.append(TACOP(op="print_s", arg1=right))
+            return IRNode(code=code)
+        
+        possible_val = last.arg1
+        if isinstance(possible_val, str) and possible_val.startswith('"'):
             code.append(TACOP(op="print_s", arg1=val.place))
         else:
             code.append(TACOP(op="print", arg1=val.place))
@@ -981,18 +996,29 @@ class TacGenerator(CompiscriptVisitor):
         code = []
         self._emit_func_define(fname, code)
         # Abrir scope TAC y registrar parámetros como símbolos
+        # 1) Si estamos dentro de una clase, el parámetro 0 SIEMPRE es 'self'
+        param_idx_start = 0
+        if self.current_class is not None:
+            # Comentario útil para debugging
+            self._emit_comment(
+                f"Param 0 is reference to 'Self' for {self.current_class}",
+                code
+            )
+            # Generar TAC: load_param self, 0
+            self._emit_load_param("self", 0, code)
+            # Registrar en frame_manager y en la tabla TAC
+            self.frame_manager.allocate_param(f"func_{fname}", "self", "self", 4)
+            self.tac_table.define(symbol_or_name="self", sym_type=None, metadata={})
+            param_idx_start = 1
+
+        # 2) Parámetros explícitos (si los hay)
         if ctx.parameters():
-            # First check if we have to send 'self'
-            test_sym = self.sem_table.lookup(fname)
-            idx_sum = 0 if test_sym else 1
-            if idx_sum == 1:
-                self._emit_load_param("self", 0, code)
-                self.frame_manager.allocate_param(f"func_{fname}", "self", "", 4)
             for i, pctx in enumerate(ctx.parameters().parameter()):
                 pname = pctx.Identifier().getText()
                 self.frame_manager.allocate_param(f"func_{fname}", pname, "func", 4)
-                self._emit_load_param(pname, i+idx_sum,code)
-                # en TAC basta con darlos de alta (tipo opcional)
+                # Si estamos en una clase, los params comienzan en índice 1 (después de self)
+                self._emit_load_param(pname, i + param_idx_start, code)
+                # En TAC basta con darlos de alta (tipo opcional)
                 self.tac_table.define(symbol_or_name=pname, sym_type=None, metadata={})
         # Cuerpo
         # body = self.visit(ctx.block())

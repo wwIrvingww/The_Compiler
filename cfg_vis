@@ -1,24 +1,15 @@
 // Control Flow Graph
 digraph {
-	0 [label="Block 0\n0-2"]
-	1 [label="Block 1\n3-7\nLabels: L0"]
-	2 [label="Block 2\n8-8"]
-	3 [label="Block 3\n9-19\nLabels: L1"]
-	4 [label="Block 4\n20-20"]
-	5 [label="Block 5\n21-24\nLabels: L4"]
-	6 [label="Block 6\n25-28\nLabels: L5"]
-	7 [label="Block 7\n29-30\nLabels: L6"]
-	8 [label="Block 8\n31-36\nLabels: L2"]
-	9 [label="Block 9\n37-37\nLabels: L3"]
+	0 [label="Block 0\n0-25"]
+	1 [label="Block 1\n26-30\nLabels: L0"]
+	2 [label="Block 2\n31-31"]
+	3 [label="Block 3\n32-42\nLabels: L1"]
+	4 [label="Block 4\n43-48\nLabels: L2"]
+	5 [label="Block 5\n49-49\nLabels: L3"]
 	0 -> 1
 	1 -> 3
 	1 -> 2
-	2 -> 9
-	3 -> 5
+	2 -> 5
 	3 -> 4
-	4 -> 6
-	5 -> 7
-	6 -> 7
-	7 -> 8
-	8 -> 1
+	4 -> 1
 }

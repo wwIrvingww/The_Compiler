@@ -397,7 +397,7 @@ class TacGenerator(CompiscriptVisitor):
                 code = code + tem_node.code
         
         final_code = self.functions + self.class_methods + code
-        final_code = self.peephole(final_code)
+        # final_code = self.peephole(final_code)
         
         self.code = final_code
         # self.dump_runtime_info()
@@ -1078,8 +1078,8 @@ class TacGenerator(CompiscriptVisitor):
             try: 
 
                 if is_list(ty):
-                    self._emit_create_array(id=id, code=code)
                     if not init:
+                        self._emit_create_array(id=id, code=code)
                         node = IRAssign(
                             place=id,
                             name=id,
@@ -1088,6 +1088,7 @@ class TacGenerator(CompiscriptVisitor):
                     
             except Exception as e:
                 print("ERROR:",e)
+                
         
         if init:
             expr_rslt = self.visit(init.expression())
@@ -1236,9 +1237,12 @@ class TacGenerator(CompiscriptVisitor):
         l_place = lhs_node.place
         # Asignación simple a variable (o a lo que retorne leftHandSide por ahora)
 
+        
         if (l_place[-1] == "]"):
             # Pop last tacop, just placeholder
-            code = code[:-1]
+            
+            if rhs_node:
+                code += rhs_node.code
             parts = l_place[:-1].split("[")
             # Should have only two parameters in ANY case
             base = parts[0]
@@ -1250,10 +1254,9 @@ class TacGenerator(CompiscriptVisitor):
                 index=index,
                 code=code
             )
+        elif rhs_node:
+                code += rhs_node.code
     
-        
-        if rhs_node:
-            code += rhs_node.code
             
         elif isinstance(lhs_node, IRClassMethod):
             print(lhs_node)
@@ -1346,10 +1349,11 @@ class TacGenerator(CompiscriptVisitor):
                             code=code
                         ))
                     else:
+                        pl = self._emit_bin("+", sop.place, 1, code)
                         suffixes.append(IRArray(
-                            place=f"{before.place}[{sop.place}]",
+                            place=f"{before.place}[{pl}]",
                             base=before.place,
-                            index=sop.place,
+                            index=pl,
                             code = code
                         ))
                 if text[0] =="(":  # Handle for call
@@ -1718,7 +1722,6 @@ class TacGenerator(CompiscriptVisitor):
     
     def visitArrayLiteral(self, ctx):
         code = []
-        
         arr_temp = self._emit_create_array(id=None,code=code)
         arr_text = ctx.getText().strip()[1:-1].strip()
         arr_iter = self._split_array_elements(arr_text)

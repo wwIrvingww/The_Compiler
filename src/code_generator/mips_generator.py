@@ -30,7 +30,20 @@ class FunctionCodegenContext:
     reg_alloc: RegisterAllocator
     param_counter: int = 0
 
-
+def _gen_offsets_from_tac(code: List[TACOP])->Dict[str,int]:
+    rslts = []
+    for t in code:
+        if t.op not in ("fn_decl", "label") and t.result:
+            rslts.append(t.result)
+    rslts = list(set(rslts)) # no repeats
+    var_offsets = {}
+    offset = -8
+    for r in rslts:
+        var_offsets[r] = offset
+        offset-=4
+    return var_offsets
+    
+        
 class MIPSCodeGenerator:
     """
     High level driver that turns TAC into a full .asm string.
@@ -65,14 +78,17 @@ class MIPSCodeGenerator:
 
         # 2) Generate body for each function
         for func_name in self.pre.get_all_functions():
-            
             func_tac, frame_info, liveness, _saved_regs = self.pre.get_function_info(func_name)
+            max_liv = 0
+            var_offsets = _gen_offsets_from_tac(func_tac)
             ctx = FunctionCodegenContext(
                 name=func_name,
                 frame_info=frame_info,
                 liveness=liveness,
                 body=[],
-                reg_alloc=RegisterAllocator(base_pointer="$fp"),
+                reg_alloc=RegisterAllocator(
+                    base_pointer="$fp",
+                    var_offsets=var_offsets)
             )
 
             self._generate_function_body(ctx, func_tac)
@@ -135,6 +151,13 @@ class MIPSCodeGenerator:
                 self._emit_print(ctx, tac, live_out, True)
             elif tac.op == "call":
                 self._emit_call(ctx, tac, live_out)
+            # Arrays
+            elif tac.op == "CREATE_ARRAY":
+                self._emit_create_array(ctx, tac, live_out)
+            elif tac.op == "load":
+                self._emit_load(ctx, tac, live_out)
+            elif tac.op == "store":
+                self._emit_store(ctx, tac, live_out)
             else:
                 # For unsupported ops, emit a comment so it is visible in output.
                 ctx.body.append(f"    # TODO: unsupported TAC op {tac.op} ({tac})")
@@ -196,6 +219,9 @@ class MIPSCodeGenerator:
             ctx.body.append(f"    move {dest_reg}, {src_reg}    # {dest} = {src}")
         ctx.reg_alloc.mark_written(dest_reg)
 
+    # ========================
+    #       Functions (params & calls)
+    # =========================
     def _emit_push_param(self, ctx, tac, live_out):
         pcount = ctx.param_counter
         if pcount < 4:
@@ -240,7 +266,6 @@ class MIPSCodeGenerator:
         else:
             ctx.body.append(f"    # TODO: params >4 go with stack")    
         
-        
     def _emit_call(self, ctx, tac, live_out):
         fname = tac.arg1
         dest = tac.result
@@ -253,6 +278,53 @@ class MIPSCodeGenerator:
             ctx.body.append(f"    move {dest_reg}, $v0    # ret of {fname}()")
         ctx.param_counter=0
         
+    # ==========================
+    #       Arrays (init, load and store)
+    # ==========================    
+    
+    def _emit_create_array(self,ctx, tac, live_out):
+        dest = tac.result
+        
+        dest_reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
+        ctx.body.extend(pre)
+        
+        ctx.body.append(f"\n    # == CREATE ARRAY ({dest}) == #")
+        ctx.body.append(f"    li $v0, 9    # srbk (heap)")
+        ctx.body.append(f"    li $a0, 1024    # Fixed limit -> 256 elements")
+        ctx.body.append(f"    syscall")
+        ctx.body.append(f"    move {dest_reg}, $v0    # {dest} = new Array")
+        ctx.body.append(f"    # == END CREATE ARRAY == #\n")
+        ctx.reg_alloc.mark_written(dest_reg)
+        
+    def _emit_load(self, ctx, tac, live_out):
+        src_addr = tac.arg1
+        dest = tac.result   
+        
+        src_reg, pre1 = ctx.reg_alloc.get_register_for(src_addr, live_out, for_read=True, for_write=False)
+        dest_reg, pre2 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
+        
+        ctx.body.extend(pre1)
+        ctx.body.extend(pre2)
+        ctx.body.append(f"    lw {dest_reg}, 0({src_reg})")
+        ctx.reg_alloc.mark_written(dest_reg)
+        pass
+
+    def _emit_store(self, ctx, tac, live_out):
+        dest_addr = tac.result
+        src = tac.arg1
+        
+        src_reg, pre1 = ctx.reg_alloc.get_register_for(src, live_out, for_read=True, for_write=False)
+        dest_reg, pre2 = ctx.reg_alloc.get_register_for(dest_addr, live_out, for_read=False, for_write=True)
+        
+        ctx.body.extend(pre1)
+        ctx.body.extend(pre2)
+        ctx.body.append(f"    sw {src_reg}, 0({dest_reg})")
+        ctx.reg_alloc.mark_written(dest_reg)
+        
+    # ====================
+    #       Other
+    # ====================
+    
     def _emit_print(self, ctx, tac, live_out, is_str):
         src = tac.arg1
         src_reg, pre1 = ctx.reg_alloc.get_register_for(
@@ -311,7 +383,12 @@ class MIPSCodeGenerator:
         mips_op = op_map[op]
 
         reg_a, pre1 = ctx.reg_alloc.get_register_for(a, live_out, for_read=True, for_write=False)
+        if (self._is_int_literal(a)):
+            pre1.append(f"    li {reg_a}, {a}")
+            
         reg_b, pre2 = ctx.reg_alloc.get_register_for(b, live_out, for_read=True, for_write=False)
+        if (self._is_int_literal(b)):
+            pre2.append(f"    li {reg_b}, {b}")
         reg_dest, pre3 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
 
         ctx.body.extend(pre1)

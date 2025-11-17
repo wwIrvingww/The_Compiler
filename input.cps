@@ -1,10 +1,7 @@
-for (let i = 0; i < 30; i = i + 1){
-    let mod = i%2;
-    print(i);
-    if (mod == 0){
-        print(" is even!\n");
-    }
-    else {
-        print(" is Odd!\n");
-    }
+
+
+let arr = [5,1,32,745,42];
+for (let i = 0; i < 5; i = i+1){
+    print(arr[i]);
+    print(", ");
 }

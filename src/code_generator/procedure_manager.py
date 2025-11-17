@@ -18,6 +18,7 @@ class FrameInfo:
     param_count: int = 0         # Número de parámetros
     uses_saved_regs: Set[str] = None  # $s0-$s7 usados
     max_call_args: int = 0       # Máximo args en llamadas internas
+    most_negative_offset: int = 0
     fsize : int = 0
     def __post_init__(self):
         if self.uses_saved_regs is None:
@@ -85,7 +86,6 @@ class ProcedureManager:
                     # Calcular tamaño de locales
                     local_size = 0
                     param_count = 0
-
                     fparams = frame.params
                     flocals = frame.locals
                     for sym_name, slot in fparams.items():
@@ -129,6 +129,7 @@ class ProcedureManager:
         """
         if frame_info is None:
             frame_info: FrameInfo = self.get_frame_info(func_name)
+            
         code = []
         
         eff_size = frame_info.fsize + 8 # 8 por ra y fp

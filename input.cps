@@ -1,13 +1,10 @@
-function fib(n: integer): integer{
-    if (n <= 1){
-        return n;
+for (let i = 0; i < 30; i = i + 1){
+    let mod = i%2;
+    print(i);
+    if (mod == 0){
+        print(" is even!\n");
     }
-    else{
-        let val = fib(n-1) + fib(n-2);
-        print(val);
-        return val;
+    else {
+        print(" is Odd!\n");
     }
 }
-
-let ret = fib(10);
-print(ret);

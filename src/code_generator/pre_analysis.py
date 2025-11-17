@@ -192,6 +192,40 @@ def is_literal(operand: str) -> bool:
     return False
 
 
+def encode_strs(code: List[TACOP]):
+    # Enode strings
+    str_encoder = {} # value->idx
+    counter = 0
+    for i, t in enumerate(code):
+        if t.arg1:
+            if (t.arg1.startswith('"')):
+                if t.arg1 not in str_encoder:
+                    str_encoder[t.arg1] = {
+                        "id": f"str{counter}",
+                    }
+                counter+=1
+        if t.arg2:
+            if (t.arg2.startswith('"')):
+                if t.arg2 not in str_encoder:
+                    str_encoder[t.arg2] = {
+                        "id": f"str{counter}",
+                    }
+                counter+=1
+    
+    # No strings -> return case
+    if len(str_encoder) == 0:
+        return None, None
+    
+    # Prepare data section
+    data_section = []
+    for k, v in str_encoder.items():
+        data_section.append(
+            f"{v["id"]}: .asciiz {k}"
+        )
+
+    return str_encoder, data_section
+    
+
 def liveness_analysis(func_tac: List[TACOP]) -> Dict[int, Set[str]]:
     """
     Calcula las variables vivas (live) en cada instrucción.
@@ -362,6 +396,12 @@ class MIPSPreAnalysis:
         self.tac_code = tac_code
         self.frame_manager = frame_manager
         
+        str_encoder, data_section = encode_strs(tac_code)
+        self.data_section = []
+        self.str_encoder = {}
+        if str_encoder:
+            self.str_encoder = str_encoder
+            self.data_section = data_section
         # Resultados del análisis (se llenan al llamar analyze())
         self.functions: Dict[str, FunctionInfo] = {}
         self.frame_infos: Dict[str, FrameInfo] = {}

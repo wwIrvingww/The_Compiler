@@ -83,7 +83,7 @@ class MIPSCodeGenerator:
         # 3) Use ProcedureManager helper to assemble a complete .asm
         asm_text = generate_asm_file(
             functions=functions_payload,
-            data_section=[],
+            data_section=self.pre.data_section,
             procedure_manager=self.proc_manager,
         )
         return asm_text
@@ -130,7 +130,9 @@ class MIPSCodeGenerator:
             elif tac.op == "load_param":
                 self._emit_load_param(ctx, tac, live_out)
             elif tac.op == "print":
-                self._emit_print(ctx, tac, live_out)
+                self._emit_print(ctx, tac, live_out, False)
+            elif tac.op == "print_s":
+                self._emit_print(ctx, tac, live_out, True)
             elif tac.op == "call":
                 self._emit_call(ctx, tac, live_out)
             else:
@@ -175,6 +177,13 @@ class MIPSCodeGenerator:
             reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
             ctx.body.extend(pre)
             ctx.body.append(f"    li {reg}, {val}    # {dest} = {src}")
+            ctx.reg_alloc.mark_written(reg)
+            return
+        if src.startswith('"'):
+            reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
+            ctx.body.extend(pre)
+            data_reg = self.pre.str_encoder.get(src, {})["id"]
+            ctx.body.append(f"    la {reg}, {data_reg}    # {dest} = (str){src}")
             ctx.reg_alloc.mark_written(reg)
             return
 
@@ -244,7 +253,7 @@ class MIPSCodeGenerator:
             ctx.body.append(f"    move {dest_reg}, $v0    # ret of {fname}()")
         ctx.param_counter=0
         
-    def _emit_print(self, ctx, tac, live_out):
+    def _emit_print(self, ctx, tac, live_out, is_str):
         src = tac.arg1
         src_reg, pre1 = ctx.reg_alloc.get_register_for(
             src,
@@ -252,6 +261,13 @@ class MIPSCodeGenerator:
             for_read=True,
             for_write=False
         )
+        
+        if (is_str):
+            ctx.body.extend(pre1)
+            ctx.body.append(f"    li $v0, 4    # print string")
+            ctx.body.append(f"    move $a0, {src_reg}    # print({src_reg})")
+            ctx.body.append(f"    syscall")
+            return
         
         ctx.body.extend(pre1)
         ctx.body.append(f"    li $v0, 1    # print int")

@@ -1,40 +1,38 @@
-FN func_fib
-n = load_param 0
-t0 = n
-t1 = 1
-t2 = t0 <= t1
-if t2 goto L0
-goto L1
+FN func_main
+t0 = 0
+i = t0
 label L0
-t3 = n
-return t3
-goto L2
+t1 = i
+t2 = 30
+t3 = t1 < t2
+if t3 goto L1
+goto L3
 label L1
-t4 = n
-t5 = 1
-t6 = t4 - t5
-push_param t6
-t7 = call func_fib
-t8 = t7
-t9 = n
-t10 = 2
-t11 = t9 - t10
-push_param t11
-t12 = call func_fib
-t13 = t12
-t14 = t8 + t13
-val = t14
-t15 = val
-print t15
-t16 = val
-return t16
+t7 = i
+t8 = 2
+t9 = t7 % t8
+mod = t9
+t10 = i
+print t10
+t11 = mod
+t12 = 0
+t13 = t11 == t12
+if t13 goto L4
+goto L5
+label L4
+t14 = " is even!\n"
+None = t14 print_s
+goto L6
+label L5
+t15 = " is Odd!\n"
+None = t15 print_s
+goto L6
+label L6
 goto L2
 label L2
-FN func_main
-t17 = 10
-push_param t17
-t18 = call func_fib
-t19 = t18
-ret = t19
-t20 = ret
-print t20
+t4 = i
+t5 = 1
+t6 = t4 + t5
+i = t6
+goto L0
+label L3

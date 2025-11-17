@@ -588,6 +588,7 @@ class TacGenerator(CompiscriptVisitor):
             init_node = self.visit(ctx.variableDeclaration());  code += init_node.code if init_node else []
         elif ctx.assignment():
             init_node = self.visit(ctx.assignment());           code += init_node.code if init_node else []
+            
 
         # cond y update
         cond_node, upd_node = None, None
@@ -595,7 +596,23 @@ class TacGenerator(CompiscriptVisitor):
             exprs = ctx.expression()
             if isinstance(exprs, list):
                 if len(exprs) >= 1: cond_node = self.visit(exprs[0])
-                if len(exprs) >= 2: upd_node  = self.visit(exprs[1])
+                if len(exprs) >= 2: 
+                    upd_node  = self.visit(exprs[1])
+                    up_code = upd_node.code
+                    up_place = upd_node.place
+                    tem_code = []
+                    tem_code += up_code
+                    if (up_code[-1].result != up_place):
+                        self._emit_assign(
+                            up_place,
+                            up_code[-1].result,
+                            tem_code
+                        )
+                    upd_node = IRNode(
+                        place=up_place,
+                        code=tem_code
+                    )
+                    
             else:
                 cond_node = self.visit(exprs)
 
@@ -938,10 +955,16 @@ class TacGenerator(CompiscriptVisitor):
         print '(' expression ')' ';'
         """
         val = self.visit(ctx.expression())
+        
         code = []
         if val and val.code:
             code += val.code
-        code.append(TACOP(op="print", arg1=val.place))
+        
+        possible_val = val.code[-1].arg1
+        if (possible_val.startswith('"')):
+            code.append(TACOP(op="print_s", arg1=val.place))
+        else:
+            code.append(TACOP(op="print", arg1=val.place))
         return IRNode(code=code)
     
     # Function Declaration

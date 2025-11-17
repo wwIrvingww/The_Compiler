@@ -100,72 +100,54 @@ def code_to_tac(source: str):
     # ¡NO filtramos por isinstance(TACOP)! Para evitar el bug de doble módulo.
     return list(tac_code)
 
-# def test_simple_while_to_mips(tmp_path):
-#     """
-#     Prueba que genera MIPS desde código fuente con un while
-#     """
-#     source = """
-#     let a = 0;
-#     while(a < 10){
-#         a = a + 1;
-#         print(a);
-#     }
-#     """
+def test_simple_while_to_mips(tmp_path):
+    """
+    Caso sencillo de while
+    """
+    source = """
+    let a = 0;
+    while(a < 10){
+        a = a + 1;
+        print(a);
+    }
+    """
 
-#     # 1) Código fuente -> TAC
-#     tac = code_to_tac(source)
+    # 1) Código fuente -> TAC
+    tac = code_to_tac(source)
 
-#     print("\n===== TAC generado =====")
-#     for op in tac:
-#         print(op)
-#     print("===== FIN TAC =====\n")
+    # print("\n===== TAC generado (while simple) =====")
+    # for op in tac:
+    #     print(op)
+    # print("===== FIN TAC (while simple) =====\n")
 
-#     # Sanity mínimo: que no esté vacío y contenga '<' y 'print'
-#     assert tac, "El TAC está vacío (no se generó nada)."
-#     ops = [getattr(op, "op", None) for op in tac]
-#     assert "<" in ops, "El TAC no contiene la comparación '<'"
-#     assert "print" in ops, "El TAC no contiene ninguna instrucción 'print'"
+    # Sanity mínimo: que no esté vacío y contenga '<' y 'print'
+    assert tac, "El TAC está vacío (no se generó nada)."
+    ops = [getattr(op, "op", None) for op in tac]
+    assert "<" in ops, "El TAC no contiene la comparación '<'"
+    assert "print" in ops, "El TAC no contiene ninguna instrucción 'print'"
 
-#     # 2) TAC -> MIPS
-#     gen = MIPSCodeGenerator(tac)
-#     asm = gen.generate()
+    # 2) TAC -> MIPS
+    gen = MIPSCodeGenerator(tac)
+    asm = gen.generate()
 
-#     # Guardar MIPS en un archivo temporal dentro del contenedor
-#     out_file = tmp_path / "generated_mips_while_from_code.asm"
-#     out_file.write_text(asm, encoding="utf-8")
+    # Guardar MIPS en un archivo temporal dentro del contenedor
+    out_file = tmp_path / "generated_mips_while_from_code.asm"
+    out_file.write_text(asm, encoding="utf-8")
 
-#     # 3) Imprimir el MIPS completo en la terminal
-#     print("\n===== MIPS generado (while desde código) =====\n")
-#     print(asm)
-#     print("===== FIN MIPS =====\n")
+    # 3) Imprimir el MIPS completo en la terminal
+    # print("\n===== MIPS generado (while simple) =====\n")
+    # print(asm)
+    # print("===== FIN MIPS (while simple) =====\n")
 
-#     # Sanity: que no esté vacío
-#     assert asm.strip() != ""
+    # Sanity: que no esté vacío
+    assert asm.strip() != ""
 
 def test_complex_while_to_mips(tmp_path):
     """
-    Código de prueba:
-
-        let a = 0;
-        let b = 10;
-        let sum = 0;
-
-        while (a < b && sum < 50) {
-            a = a + 1;
-            sum = sum + a;
-
-            if (sum > 30) {
-                let c = 0;
-                while (c < a) {
-                    c = c + 2;
-                }
-            } else {
-                sum = sum + 1;
-            }
-        }
-
-    Se convierte a TAC con code_to_tac() y luego a MIPS con MIPSCodeGenerator.
-    El MIPS se imprime en la terminal para poder probarlo en QtSpim.
+    Código de prueba con while complejo:
+      - condición compuesta (&&)
+      - if dentro del while
+      - while dentro del if
     """
     source = """
     let a = 0;
@@ -224,9 +206,120 @@ def test_complex_while_to_mips(tmp_path):
     out_file.write_text(asm, encoding="utf-8")
 
     # 3) Imprimir el MIPS completo en la terminal
-    print("\n===== MIPS generado (while complejo) =====\n")
-    print(asm)
-    print("===== FIN MIPS (while complejo) =====\n")
+    # print("\n===== MIPS generado (while complejo) =====\n")
+    # print(asm)
+    # print("===== FIN MIPS (while complejo) =====\n")
 
     # Sanity: que no esté vacío
+    assert asm.strip() != ""
+
+def test_for_simple_to_mips(tmp_path):
+    """
+    Caso sencillo de for
+    """
+    source = """
+    let i = 0;
+    let sum = 0;
+
+    for (i = 0; i < 4; i = i + 1) {
+        sum = sum + i;
+        print(i);
+        print(sum);
+    }
+    """
+
+    # 1) Código fuente -> TAC
+    tac = code_to_tac(source)
+
+    # print("\n===== TAC generado (for simple) =====")
+    # for op in tac:
+    #     print(op)
+    # print("===== FIN TAC (for simple) =====\n")
+
+    # Sanity mínimo
+    assert tac, "El TAC del for simple está vacío."
+    ops = [getattr(op, "op", None) for op in tac]
+    assert "if-goto" in ops or "goto" in ops, "El TAC no parece tener control de flujo."
+    assert "print" in ops, "El TAC no contiene ningún print."
+
+    # 2) TAC -> MIPS
+    gen = MIPSCodeGenerator(tac)
+    asm = gen.generate()
+
+    # Guardar el MIPS en archivo temporal
+    out_file = tmp_path / "generated_mips_for_simple.asm"
+    out_file.write_text(asm, encoding="utf-8")
+
+    # 3) Imprimir MIPS para copiar a QtSpim
+    # print("\n===== MIPS generado (for simple) =====\n")
+    # print(asm)
+    # print("===== FIN MIPS (for simple) =====\n")
+
+    assert asm.strip() != ""
+
+def test_for_complex_to_mips(tmp_path):
+    """
+    Caso complejo de for con:
+      - dos fors anidados
+      - if dentro del for interno
+      - varias impresiones para seguir el flujo
+    """
+    source = """
+    let total = 0;
+
+    for (let i = 0; i < 3; i = i + 1) {
+        for (let j = 0; j < 3; j = j + 1) {
+            let s = i + j;
+            print("i=");
+            print(i);
+            print(" j=");
+            print(j);
+            if (s > 2) {
+                print(" s=");
+                print(s);
+                print(" total before=");
+                print(total);
+                total = total + s;
+                print(" total=");
+                print(total);
+            } else {
+                print(" s=");
+                print(s);
+            }
+            print(" | ");
+        }
+        print(" [end outer iteration] ");
+    }
+    print("FINAL TOTAL=");
+    print(total);
+    """
+
+    # 1) Código fuente -> TAC
+    tac = code_to_tac(source)
+
+    # print("\n===== TAC generado (for complejo) =====")
+    # for op in tac:
+    #     print(op)
+    # print("===== FIN TAC (for complejo) =====\n")
+
+    # Sanity mínimo
+    assert tac, "El TAC del for complejo está vacío."
+    ops = [getattr(op, "op", None) for op in tac]
+    assert "if-goto" in ops, "El TAC no contiene saltos condicionales (if-goto)."
+    assert "label" in ops, "El TAC no contiene etiquetas de control de flujo."
+    assert "print" in ops, "El TAC no contiene ningún print."
+
+    # 2) TAC -> MIPS
+    gen = MIPSCodeGenerator(tac)
+    asm = gen.generate()
+
+    # Guardar el MIPS en archivo temporal
+    out_file = tmp_path / "generated_mips_for_complex.asm"
+    out_file.write_text(asm, encoding="utf-8")
+
+    # 3) Imprimir MIPS para copiar a QtSpim
+    print("\n===== MIPS generado (for complejo) =====\n")
+    print(asm)
+    print("===== FIN MIPS (for complejo) =====\n")
+
     assert asm.strip() != ""

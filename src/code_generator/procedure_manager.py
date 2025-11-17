@@ -65,6 +65,7 @@ class ProcedureManager:
         """
         self.frame_manager = frame_manager
         self.frame_cache = {}  # {func_name: FrameInfo}
+        self.var_offsets = {}
     
     def get_frame_info(self, func_name: str) -> FrameInfo:
         """
@@ -147,7 +148,13 @@ class ProcedureManager:
         # 2. Establecer nuevo frame pointer
         # code.append("    # Establecer nuevo frame pointer")
         code.append("    move $fp, $sp")
-        
+
+        if self.var_offsets:
+            offs_for_func = self.var_offsets.get(func_name)
+            if offs_for_func and "self" in offs_for_func:
+                self_off = offs_for_func["self"]
+                code.append(f"    sw $a0, {self_off}($fp)        # iniciar self en el frame")
+
         # 3. Reservar espacio para locales + registros salvados
         # total_space = frame_info.total_frame_size
         # if total_space > 0:
@@ -257,6 +264,7 @@ class ProcedureManager:
             Lista completa de instrucciones MIPS
         """
         code = []
+        self.var_offsets = var_offsets or {}
         # Prólogo
         max_offset = 0
 

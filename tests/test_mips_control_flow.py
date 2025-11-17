@@ -373,113 +373,119 @@ def test_class_simple_to_mips(tmp_path):
     out_file.write_text(asm, encoding="utf-8")
 
     # 3) Imprimir MIPS para copiar a QtSpim
-    print("\n===== MIPS generado (clase simple) =====\n")
-    print(asm)
-    print("===== FIN MIPS (clase simple) =====\n")
+    # print("\n===== MIPS generado (clase simple) =====\n")
+    # print(asm)
+    # print("===== FIN MIPS (clase simple) =====\n")
 
     # Sanity: que no esté vacío
     assert asm.strip() != ""
 
-# def test_class_complex_to_mips(tmp_path):
-#     """
-#     Caso complejo de clases:
-#       - Clase Account con dueño y balance
-#       - Clase Bank que cobra comisiones
-#       - Métodos con if, actualización de varios campos
-#       - Interacción entre dos instancias (transferencias y cargos)
-#     """
-#     source = """
-#     class Account {
-#         let owner;
-#         let balance;
+def test_class_complex_to_mips(tmp_path):
+    """
+    Caso complejo de clases:
+      - Clase Account con dueño y balance
+      - Clase Bank que cobra comisiones
+      - Métodos con if, actualización de varios campos
+      - Interacción entre dos instancias (transferencias y cargos)
+    """
+    source = """
+    class Account {
+        var owner: string;
+        var balance: integer;
 
-#         function constructor(owner, initial) {
-#             this.owner = owner;
-#             this.balance = initial;
-#         }
+        function constructor(owner: string, initial: integer) {
+            this.owner = owner;
+            this.balance = initial;
+        }
 
-#         function deposit(amount) {
-#             this.balance = this.balance + amount;
-#             print(" deposit=");
-#             print(amount);
-#         }
+        function deposit(amount: integer) {
+            this.balance = this.balance + amount;
+            print(" deposit=");
+            print(amount);
+        }
 
-#         function transferTo(other, amount) {
-#             print(" transfer from ");
-#             print(this.owner);
-#             print(" to ");
-#             print(other.owner);
-#             print(" amount=");
-#             print(amount);
+        function transferTo(other: Account, amount: integer) {
+            print(" transfer from " + this.owner);
+            print(" to " + other.owner);
+            print(" amount=");
+            print(amount);
 
-#             if (amount > this.balance) {
-#                 print(" insufficient balance");
-#             } else {
-#                 this.balance = this.balance - amount;
-#                 other.balance = other.balance + amount;
-#             }
-#         }
+            if (amount > this.balance) {
+                print(" insufficient balance");
+            } else {
+                this.balance = this.balance - amount;
+                other.balance = other.balance + amount;
+            }
+        }
 
-#         function printInfo() {
-#             print("Account ");
-#             print(this.owner);
-#             print(" balance=");
-#             print(this.balance);
-#         }
-#     }
+        function printInfo() {
+            print("Account " + this.owner);
+            print(" balance=");
+            print(this.balance);
+        }
+    }
 
-#     class Bank {
-#         let name;
-#         let fee;
+    class Bank {
+        var name: string;
+        var fee: integer;
 
-#         function constructor(name, fee) {
-#             this.name = name;
-#             this.fee = fee;
-#         }
+        function constructor(name: string, fee: integer) {
+            this.name = name;
+            this.fee = fee;
+        }
 
-#         function chargeMonthlyFee(account) {
-#             print("Bank ");
-#             print(this.name);
-#             print(" charging fee=");
-#             print(this.fee);
-#             account.transferTo(account, this.fee);
-#         }
-#     }
+        function chargeMonthlyFee(account: Account) {
+            print("Bank " + this.name);
+            print(" charging fee=");
+            print(this.fee);
+            account.transferTo(account, this.fee);
+        }
+    }
 
-#     let a = new Account("Alice", 10);
-#     let b = new Account("Bob", 5);
-#     let bank = new Bank("MyBank", 1);
+    let a = new Account("Alice", 10);
+    let b = new Account("Bob", 5);
+    let bank = new Bank("MyBank", 1);
 
-#     a.printInfo();
-#     b.printInfo();
+    a.printInfo();
+    b.printInfo();
 
-#     a.deposit(3);
-#     a.printInfo();
+    a.deposit(3);
+    a.printInfo();
 
-#     a.transferTo(b, 5);
-#     a.printInfo();
-#     b.printInfo();
+    a.transferTo(b, 5);
+    a.printInfo();
+    b.printInfo();
 
-#     bank.chargeMonthlyFee(a);
-#     a.printInfo();
-#     """
+    bank.chargeMonthlyFee(a);
+    a.printInfo();
+    """
 
-#     # 1) Código fuente -> TAC
-#     tac = code_to_tac(source)
+    # 1) Código fuente -> TAC
+    tac = code_to_tac(source)
 
-#     # Sanity: que haya control de flujo, llamadas y prints
-#     assert tac, "El TAC del caso complejo de clases está vacío."
-#     ops = [getattr(op, "op", None) for op in tac]
-#     assert "call" in ops, "El TAC no contiene llamadas (call)."
-#     assert any(op in ops for op in ("if-goto", "if")), "El TAC no contiene saltos condicionales para el if."
-#     assert "label" in ops, "El TAC no contiene etiquetas de control de flujo."
-#     assert "print" in ops, "El TAC no contiene ningún print."
+    # print("\n===== TAC generado (clase complejo) =====")
+    # for op in tac:
+    #     print(op)
+    # print("===== FIN TAC (clase complejo) =====\n")
 
-#     # 2) TAC -> MIPS
-#     gen = MIPSCodeGenerator(tac)
-#     asm = gen.generate()
+    # Sanity: que haya control de flujo, llamadas y prints
+    assert tac, "El TAC del caso complejo de clases está vacío."
+    ops = [getattr(op, "op", None) for op in tac]
+    assert "call" in ops, "El TAC no contiene llamadas (call)."
+    assert any(op in ops for op in ("if-goto", "if")), "El TAC no contiene saltos condicionales para el if."
+    assert "label" in ops, "El TAC no contiene etiquetas de control de flujo."
+    assert "print" in ops, "El TAC no contiene ningún print."
 
-#     out_file = tmp_path / "generated_mips_class_complex.asm"
-#     out_file.write_text(asm, encoding="utf-8")
+    # 2) TAC -> MIPS
+    gen = MIPSCodeGenerator(tac)
+    asm = gen.generate()
 
-#     assert asm.strip() != ""
+    out_file = tmp_path / "generated_mips_class_complex.asm"
+    out_file.write_text(asm, encoding="utf-8")
+
+    # 3) Imprimir MIPS para copiar a QtSpim
+    print("\n===== MIPS generado (clase complejo) =====\n")
+    print(asm)
+    print("===== FIN MIPS (clase complejo) =====\n")
+
+    assert asm.strip() != ""

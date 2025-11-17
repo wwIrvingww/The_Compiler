@@ -72,7 +72,10 @@ class MIPSCodeGenerator:
         self.frame_manager = frame_manager or FrameManager()
         self.pre = MIPSPreAnalysis(tac_code, self.frame_manager)
         self.proc_manager = ProcedureManager(self.frame_manager)
+        
+        self.string_temps: Dict[str, str] = {}
 
+        
     # ------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------
@@ -216,13 +219,16 @@ class MIPSCodeGenerator:
             ctx.reg_alloc.mark_written(reg)
             return
         if src.startswith('"'):
-            reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
-            ctx.body.extend(pre)
-            data_reg = self.pre.str_encoder.get(src, {})["id"]
-            ctx.body.append(f"    la {reg}, {data_reg}    # {dest} = (str){src}")
-            ctx.reg_alloc.mark_written(reg)
+            # No tocamos el RegisterAllocator para este temp: no nos interesa
+            # que las cadenas entren al juego de liveness y reasignación.
+            data_info = self.pre.str_encoder.get(src)
+            if data_info is None:
+                ctx.body.append(f"    # WARNING: string literal {src} no encontrado en str_encoder")
+                return
+            data_label = data_info["id"]
+            self.string_temps[dest] = data_label
+            ctx.body.append(f"    # {dest} = (str){src} -> {data_label}")
             return
-
         # Case 2: move between variables/temporaries
         src_reg, pre1 = ctx.reg_alloc.get_register_for(src, live_out, for_read=True, for_write=False)
         dest_reg, pre2 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
@@ -340,20 +346,38 @@ class MIPSCodeGenerator:
     
     def _emit_print(self, ctx, tac, live_out, is_str):
         src = tac.arg1
+        if is_str:
+            # Intentamos primero usar el mapeo temp -> label, generado en _emit_assign
+            label = self.string_temps.get(src)
+
+            if label is not None:
+                # No usamos RegisterAllocator: cargamos la etiqueta directo
+                ctx.body.append(f"    li $v0, 4    # print string")
+                ctx.body.append(f"    la $a0, {label}    # print({src})")
+                ctx.body.append(f"    syscall")
+                return
+
+            # Fallback por si algún día tienes strings dinámicos o algo raro:
+            # usa el allocator, como antes.
+            src_reg, pre1 = ctx.reg_alloc.get_register_for(
+                src,
+                live_out,
+                for_read=True,
+                for_write=False
+            )
+            ctx.body.extend(pre1)
+            ctx.body.append(f"    li $v0, 4    # print string (fallback)")
+            ctx.body.append(f"    move $a0, {src_reg}    # print({src_reg})")
+            ctx.body.append(f"    syscall")
+            return
+
+        # -------- Caso normal: print int (igual que ya lo tenías) --------
         src_reg, pre1 = ctx.reg_alloc.get_register_for(
             src,
             live_out,
             for_read=True,
             for_write=False
         )
-        
-        if (is_str):
-            ctx.body.extend(pre1)
-            ctx.body.append(f"    li $v0, 4    # print string")
-            ctx.body.append(f"    move $a0, {src_reg}    # print({src_reg})")
-            ctx.body.append(f"    syscall")
-            return
-        
         ctx.body.extend(pre1)
         ctx.body.append(f"    li $v0, 1    # print int")
         ctx.body.append(f"    move $a0, {src_reg}    # print({src_reg})")

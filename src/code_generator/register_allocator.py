@@ -49,6 +49,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, Tuple
+import re
 
 
 @dataclass
@@ -97,24 +98,26 @@ class RegisterAllocator:
         # Configuración de registros disponibles
         if available_registers is None:
             # Conjunto típico de registros temporales + de salvado
-            available_registers = [
-                "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7",
-                "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
+            self.temp_registers = [
+                "$t0", "$t1", "$t2", "$t3", "$t4",
+                "$t5", "$t6", "$t7", "$t8", "$t9",
             ]
-        if not scratch_registers:
-            scratch_registers = [
-                "$t8", "$t9"
+            self.saved_registers = [
+                "$s0", "$s1", "$s2", "$s3",
+                "$s4", "$s5", "$s6", "$s7",
             ]
+            available_registers = self.temp_registers + self.saved_registers
+        else:
+            self.temp_registers = [r for r in available_registers if r.startswith("$t")]
+            self.saved_registers = [r for r in available_registers if r.startswith("$s")]
+
+        self.TEMP_REG_PATTERN = re.compile(r"^t\d+$")
         self.base_pointer: str = base_pointer
         self.var_offsets: Dict[str, int] = var_offsets.copy() if var_offsets else {}
 
         # RegisterDescriptor: reg_name -> RegisterState
         self.registers: Dict[str, RegisterState] = {
             r: RegisterState(name=r) for r in available_registers
-        }
-        
-        self.scratch_registers : Dict[str, RegisterState] = {
-            r: RegisterState(name=r) for r in scratch_registers
         }
 
         # AddressDescriptor: var_name -> set("mem" or reg_name)
@@ -196,7 +199,7 @@ class RegisterAllocator:
         self._free_register(reg_name)
         return code
 
-    def _choose_victim(self, live_out: Set[str]) -> str:
+    def _choose_victim(self, live_out: Set[str], candidate_regs: Optional[List[str]] = None) -> str:
         """
         Elige un registro víctima para SPILL cuando no hay libres.
 
@@ -206,12 +209,13 @@ class RegisterAllocator:
           3. Si todos están en live_out, preferir aquellos con offset en memoria.
           4. Como último recurso, devolver cualquiera (puede causar pérdida si no hay offset).
         """
+        regs = candidate_regs or list(self.registers.keys())
+
         # 1) no-live variables
         candidates_not_live: List[str] = []
         candidates_spillable: List[str] = []
-        all_regs: List[str] = list(self.registers.keys())
 
-        for reg_name in all_regs:
+        for reg_name in regs:
             reg = self.registers[reg_name]
             if reg.var is None:
                 return reg_name
@@ -225,7 +229,7 @@ class RegisterAllocator:
         if candidates_spillable:
             return candidates_spillable[0]
         # Peor caso: no hay buena víctima, regresamos el primero
-        return all_regs[0]
+        return regs[0]
 
     # ============================================================
     # API PRINCIPAL
@@ -255,34 +259,37 @@ class RegisterAllocator:
         """
         self._ensure_var_entry(var_name)
         code: List[str] = []
-        # 1) Si ya está en algún registro, reutilizarlo
-        for reg_name, reg_state in self.registers.items():
+        is_temp = bool(self.TEMP_REG_PATTERN.match(var_name))
+        
+        # Temporales -> $tX ; variables "reales" -> $sX
+        if is_temp:
+            search_regs = self.temp_registers
+        else:
+            # Si por alguna razón no hubiera $s, caemos a $t
+            search_regs = self.saved_registers or self.temp_registers
+
+        # 1) Si ya está en algún registro de su pool, reutilizarlo
+        for reg_name in search_regs:
+            reg_state = self.registers[reg_name]
             if reg_state.var == var_name:
-                if for_read and "mem" in self.address[var_name]:
-                    offset = self.var_offsets.get(var_name)
-                    if offset is not None:
-                        code.append(
-                        f"    lw {reg_name}, {offset}({self.base_pointer})    # reload {var_name}"
-                    )
-                # Si necesitamos leer y no hay constancia de que esté en memoria,
-                # no pasa nada: asumimos que el valor en el registro es correcto.
                 return reg_name, code
 
-        # 2) Buscar registro libre
+        # 2) Buscar registro libre en ese pool
         free_reg: Optional[str] = None
-        for reg_name, reg_state in self.registers.items():
-            if reg_state.is_free:
+        for reg_name in search_regs:
+            if self.registers[reg_name].is_free:
                 free_reg = reg_name
                 break
 
-        # 3) Si no hay registro libre, elegir víctima y hacer SPILL si hace falta
+        # 3) Si no hay registro libre, elegir víctima SOLO de ese pool
         if free_reg is None:
-            victim = self._choose_victim(live_out)
+            victim = self._choose_victim(live_out, candidate_regs=search_regs)
             code.extend(self._spill_register(victim))
             free_reg = victim
 
-        # 4) En este punto, free_reg está libre
+        # 4) En este punto, free_reg está libre y es del tipo correcto ($t o $s)
         reg_state = self.registers[free_reg]
+        self._free_register(free_reg)  # por si acaso
         reg_state.var = var_name
         reg_state.dirty = False
 
@@ -300,9 +307,6 @@ class RegisterAllocator:
                 code.append(
                     f"    # WARNING: cannot load {var_name} into {free_reg} (no offset)"
                 )
-
-        # Si la variable se usará solo para escribir, no necesitamos cargar su valor previo.
-        # El llamador deberá invocar mark_written() después de generar la instrucción.
 
         return free_reg, code
 

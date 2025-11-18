@@ -373,9 +373,9 @@ def test_class_simple_to_mips(tmp_path):
     out_file.write_text(asm, encoding="utf-8")
 
     # 3) Imprimir MIPS para copiar a QtSpim
-    # print("\n===== MIPS generado (clase simple) =====\n")
-    # print(asm)
-    # print("===== FIN MIPS (clase simple) =====\n")
+    print("\n===== MIPS generado (clase simple) =====\n")
+    print(asm)
+    print("===== FIN MIPS (clase simple) =====\n")
 
     # Sanity: que no esté vacío
     assert asm.strip() != ""
@@ -484,8 +484,8 @@ def test_class_complex_to_mips(tmp_path):
     out_file.write_text(asm, encoding="utf-8")
 
     # 3) Imprimir MIPS para copiar a QtSpim
-    print("\n===== MIPS generado (clase complejo) =====\n")
-    print(asm)
-    print("===== FIN MIPS (clase complejo) =====\n")
+    # print("\n===== MIPS generado (clase complejo) =====\n")
+    # print(asm)
+    # print("===== FIN MIPS (clase complejo) =====\n")
 
     assert asm.strip() != ""

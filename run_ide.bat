@@ -16,3 +16,4 @@ call code --extensionDevelopmentPath=%cd%
 
 echo Done! The IDE should now be running.
 pause
+ 

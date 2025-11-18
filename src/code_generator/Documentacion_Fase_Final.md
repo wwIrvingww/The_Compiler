@@ -324,8 +324,6 @@ print_sq(65, b);
 
 ### **Salida generada (input.cps.asm)**
 
-(Extracto)
-
 ```mips
 func_get_squared:
     addiu $sp, $sp, -12

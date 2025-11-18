@@ -954,14 +954,29 @@ class TacGenerator(CompiscriptVisitor):
         """
         print '(' expression ')' ';'
         """
+        expr_ctx = ctx.expression()
         val = self.visit(ctx.expression())
         
         code = []
         if val and val.code:
             code += val.code
+
+        if not val or not val.code:
+            return IRNode(code=code)
         
-        possible_val = val.code[-1].arg1
-        if (possible_val.startswith('"')):
+        last = val.code[-1]
+        expr_text = expr_ctx.getText()
+
+        if last.op == "+" and '"' in expr_text:
+            left = last.arg1
+            right = last.arg2
+
+            code.append(TACOP(op="print_s", arg1=left))
+            code.append(TACOP(op="print_s", arg1=right))
+            return IRNode(code=code)
+        
+        possible_val = last.arg1
+        if isinstance(possible_val, str) and possible_val.startswith('"'):
             code.append(TACOP(op="print_s", arg1=val.place))
         else:
             code.append(TACOP(op="print", arg1=val.place))
@@ -977,38 +992,79 @@ class TacGenerator(CompiscriptVisitor):
         
         self.current_function = fname
         self.frame_manager.enter_frame(fname)
-        # Lentry, Lexit = self._func_labels(fname)
         code = []
         self._emit_func_define(fname, code)
-        # Abrir scope TAC y registrar parámetros como símbolos
+        frame_id = f"func_{fname}"
+
+        # Ayuda a ver si un parámetro ya fue declarado en el frame
+        def _frame_has_param(param_name: str) -> bool:
+            frames_dict = getattr(self.frame_manager, "_frames", None)
+            if frames_dict is None:
+                return False
+            frame = frames_dict.get(frame_id)
+            if frame is None:
+                return False
+            params = getattr(frame, "params", {})
+            return param_name in params
+
+        # 1) Si estamos dentro de una clase, el parámetro 0 SIEMPRE es 'self'
+        param_idx_start = 0
+        if self.current_class is not None:
+            # Comentario útil para debugging
+            self._emit_comment(
+                f"Param 0 is reference to 'Self' for {self.current_class}",
+                code
+            )
+            # Generar TAC: load_param self, 0
+            self._emit_load_param("self", 0, code)
+            # Registrar en frame_manager y en la tabla TAC
+            if not _frame_has_param("self"):
+                self.frame_manager.allocate_param(frame_id, "self", "self", 4)
+            # IMPORTANTE: aquí sí guardamos el tipo de self (la clase actual)
+            self.tac_table.define(
+                symbol_or_name="self",
+                sym_type=self.current_class,
+                metadata={}
+            )
+            param_idx_start = 1
+
+        # 2) Parámetros explícitos solo si hay
         if ctx.parameters():
-            # First check if we have to send 'self'
-            test_sym = self.sem_table.lookup(fname)
-            idx_sum = 0 if test_sym else 1
-            if idx_sum == 1:
-                self._emit_load_param("self", 0, code)
-                self.frame_manager.allocate_param(f"func_{fname}", "self", "", 4)
             for i, pctx in enumerate(ctx.parameters().parameter()):
                 pname = pctx.Identifier().getText()
-                self.frame_manager.allocate_param(f"func_{fname}", pname, "func", 4)
-                self._emit_load_param(pname, i+idx_sum,code)
-                # en TAC basta con darlos de alta (tipo opcional)
-                self.tac_table.define(symbol_or_name=pname, sym_type=None, metadata={})
-        # Cuerpo
-        # body = self.visit(ctx.block())
 
+                # Tipo del parámetro, si viene anotado: owner: string, other: Account, etc.
+                ptype = None
+                type_method = getattr(pctx, "type_", None)
+                if callable(type_method):
+                    type_ctx = type_method()
+                    if type_ctx is not None:
+                        ptype = type_ctx.getText()  # "string", "integer", "Nombre_De_La_Funcion", f...
+
+                if not _frame_has_param(pname):
+                    self.frame_manager.allocate_param(frame_id, pname, "func", 4)
+                # Si estamos en una clase, los params comienzan en índice 1 (después de self)
+                self._emit_load_param(pname, i + param_idx_start, code)
+
+                # Ahora sí damos de alta el símbolo con su tipo
+                self.tac_table.define(
+                    symbol_or_name=pname,
+                    sym_type=ptype,
+                    metadata={}
+                )
+
+        # Cuerpazo
         body_ir = self.visit(ctx.block())
         if body_ir and body_ir.code:
             code += body_ir.code
 
-        self.functions+=code
+        self.functions += code
         self._exit_scope()
         self.frame_manager.exit_frame()
         self.current_function = "main"
-        # self.tac_table.define(
-            
-        # )
+
         return IRNode(place=None, code=[])
+
 
     # ==============================================================
     # ||  [6] Primary and Unary
@@ -1187,12 +1243,45 @@ class TacGenerator(CompiscriptVisitor):
                     code=code
                 )
 
-            cls_name = str(getattr(self.tac_table.lookup(obj_name), "type"))
-            att_meta = getattr(self.tac_table.lookup(cls_name), "metadata")["att_meta"]
-            offset = getattr(att_meta[prop_name],"metadata")["offset"]
+            # 1) Resolver el tipo de 'obj_name'
+            cls_name = None
+
+            # Primero intentamos en la tabla TAC (parámetros/locales)
+            var_sym = self.tac_table.lookup(obj_name)
+            if var_sym is not None:
+                cls_name = getattr(var_sym, "type", None)
+
+            # Si no lo encontramos o es None, probamos en la tabla semántica
+            if cls_name is None:
+                sem_var = self.sem_table.lookup(obj_name)
+                if sem_var is not None:
+                    vtype = getattr(sem_var, "type", None)
+                    if isinstance(vtype, str):
+                        cls_name = vtype
+                    elif vtype is not None and hasattr(vtype, "name"):
+                        cls_name = vtype.name
+
+            # 2) Buscar la definición de la clase para obtener sus atributos
+            class_sym = None
+            if cls_name is not None:
+                lookup_class = getattr(self.sem_table, "lookup_class", None)
+                if callable(lookup_class):
+                    class_sym = lookup_class(cls_name)
+                if class_sym is None:
+                    class_sym = self.sem_table.lookup(cls_name)
+
+            if class_sym is None:
+                raise RuntimeError(
+                    f"Clase '{cls_name}' no encontrada al asignar {obj_name}.{prop_name}"
+                )
+
+            cls_atts = getattr(class_sym, "metadata")["attributes"]
+            at_offset = getattr(cls_atts[prop_name], "metadata")["offset"]
+
+            # 3) Emitir el store al campo
             self._emit_store_prop(
                 obj_place=obj_name,
-                prop_offset=offset,
+                prop_offset=at_offset,
                 prop_name=prop_name,
                 cls_name=cls_name,
                 src_place=rhs_ir.place,
@@ -1421,34 +1510,61 @@ class TacGenerator(CompiscriptVisitor):
                     #     sargs = self.visit(sop_idx.arguments())
                     # print(base)    
                     
-                if text[0] ==".": # handle for attribute
+                if text[0] == ".":  # handle for attribute
                     before = suffixes[-1]
                     instance_name = before.place
-                    instance_sym = None
-                    if (instance_name == "this"): 
+
+                    # 1) Resolver el nombre de la clase
+                    if instance_name == "this":
+                        # 'this' siempre se modela como 'self' de la clase actual
                         instance_name = "self"
                         cls_name = self.current_class
                     else:
+                        # Buscar el símbolo de la variable en la tac_table
                         instance_sym = self.tac_table.lookup(instance_name)
-                        cls_name = str(getattr(instance_sym, "type"))
-                    cls_sym = self.tac_table.lookup(cls_name)
-                    if cls_sym:
-                        cls_att, cls_meth = getattr(cls_sym, "metadata")["att_meta"], getattr(cls_sym, "metadata")["meths_meta"]
+                        itype = None
+                        if instance_sym is not None:
+                            itype = getattr(instance_sym, "type", None)
+                        else:
+                            # Intento de fallback en la tabla semántica
+                            sem_var = self.sem_table.lookup(instance_name)
+                            if sem_var is not None:
+                                itype = getattr(sem_var, "type", None)
+
+                        # Normalizar el tipo a nombre de clase
+                        if isinstance(itype, str):
+                            cls_name = itype
+                        elif itype is not None and hasattr(itype, "name"):
+                            cls_name = itype.name
+                        else:
+                            cls_name = None  # Sin tipo conocido
+
+                    # 2) Buscar la definición de la clase y su metadata
+                    cls_sym = None
+                    if cls_name is not None:
+                        cls_sym = self.tac_table.lookup(cls_name) or self.sem_table.lookup(cls_name)
+
+                    if cls_sym is None:
+                        # Fallback defensivo: no conocemos la clase; evitamos crashear
+                        print(f"WARNING: clase '{cls_name}' no encontrada al resolver {instance_name}.{text[1:]}")
+                        cls_att, cls_meth = {}, {}
                     else:
-                        cls_sym = self.sem_table.lookup(cls_name)
-                        cls_att, cls_meth = getattr(cls_sym, "metadata")["attributes"], getattr(cls_sym, "metadata")["methods"]
-                    # cls_sym = getattr(self.tac_table, "lookup_class", None)
-                    # cls_sym = cls_sym(cls_name) if callable(cls_sym) else self.sem_table.lookup(cls_name)
-                    
-                    if (text[1:] in cls_att):
+                        meta = getattr(cls_sym, "metadata", {})
+                        # En tac_table usas 'att_meta'/'meths_meta'; en sem_table 'attributes'/'methods'
+                        cls_att = meta.get("att_meta") or meta.get("attributes", {})
+                        cls_meth = meta.get("meths_meta") or meta.get("methods", {})
+
+                    # 3) Si es atributo, generar TAC para acceso a campo
+                    attr_name = text[1:]
+                    if attr_name in cls_att:
                         if mode == "load":
-                            offset = getattr(cls_att[text[1:]],"metadata")["offset"]
+                            offset = getattr(cls_att[attr_name], "metadata")["offset"]
                             code = []
                             prop_place = self._emit_class_att_load(
                                 obj=instance_name,
                                 offset=offset,
                                 cname=cls_name,
-                                aname=text[1:],
+                                aname=attr_name,
                                 iname=instance_name,
                                 code=code
                             )
@@ -1456,12 +1572,13 @@ class TacGenerator(CompiscriptVisitor):
                                 place=prop_place,
                                 code=code
                             ))
-                    elif (text[1:] in cls_meth):                        
+                    elif attr_name in cls_meth:
+                        # Es un método de instancia
                         suffixes.append(IRClassMethod(
-                            place=f"{cls_name}.{text[1:]}",
+                            place=f"{cls_name}.{attr_name}",
                             class_type=cls_name,
                             parent=before.place,
-                            mname=text[1:]
+                            mname=attr_name
                         ))
         final_code = []
         if suffixes:    

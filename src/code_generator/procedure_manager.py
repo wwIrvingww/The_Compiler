@@ -65,6 +65,7 @@ class ProcedureManager:
         """
         self.frame_manager = frame_manager
         self.frame_cache = {}  # {func_name: FrameInfo}
+        self.var_offsets = {}
     
     def get_frame_info(self, func_name: str) -> FrameInfo:
         """
@@ -147,7 +148,13 @@ class ProcedureManager:
         # 2. Establecer nuevo frame pointer
         # code.append("    # Establecer nuevo frame pointer")
         code.append("    move $fp, $sp")
-        
+
+        if self.var_offsets:
+            offs_for_func = self.var_offsets.get(func_name)
+            if offs_for_func and "self" in offs_for_func:
+                self_off = offs_for_func["self"]
+                code.append(f"    sw $a0, {self_off}($fp)        # iniciar self en el frame")
+
         # 3. Reservar espacio para locales + registros salvados
         # total_space = frame_info.total_frame_size
         # if total_space > 0:
@@ -258,12 +265,19 @@ class ProcedureManager:
         """
         
         code = []
+        self.var_offsets = var_offsets or {}
+        # Prólogo
         max_offset = 0
-        if (var_offsets):
-            for k in var_offsets.keys():
-                max_offset = min(max_offset, var_offsets[k]) 
-                
-             
+
+        # Si nos pasaron var_offsets, intentamos usar los de ESTA función
+        if var_offsets:
+            offs = var_offsets.get(func_name)
+            if offs:
+                # offs es un dict {var_name: offset}
+                max_offset = 0
+                for off in offs.values():
+                    max_offset = min(max_offset, off)
+        
         code.extend(self.generate_prologue(func_name, frame_info, max_offset))
         
         # Cuerpo

@@ -270,13 +270,11 @@ class ProcedureManager:
         max_offset = 0
 
         # Si nos pasaron var_offsets, intentamos usar los de ESTA función
-        if var_offsets:
-            offs = var_offsets.get(func_name)
-            if offs:
-                # offs es un dict {var_name: offset}
-                max_offset = 0
-                for off in offs.values():
-                    max_offset = min(max_offset, off)
+        local_offsets = var_offsets[func_name]
+        if (local_offsets):
+            for k in local_offsets.keys():
+                max_offset = min(max_offset, local_offsets[k]) 
+
         
         code.extend(self.generate_prologue(func_name, frame_info, max_offset))
         
@@ -380,7 +378,7 @@ def generate_asm_file(
     functions: List[tuple],  # [(func_name, body_instructions, has_return)]
     data_section: List[str] = None,
     procedure_manager: ProcedureManager = None,
-    var_offsets = None
+    var_offsets = None,
 ) -> str:
     """
     Genera un archivo .asm completo con múltiples funciones.
@@ -411,7 +409,7 @@ def generate_asm_file(
     # Funciones
     for func_name, body, has_return in functions:
         func_code = procedure_manager.generate_simple_function(
-            func_name, body, has_return=has_return, var_offsets=var_offsets,
+            func_name, body, has_return=has_return, var_offsets=var_offsets
         )
         lines.extend(func_code)
         lines.append("")

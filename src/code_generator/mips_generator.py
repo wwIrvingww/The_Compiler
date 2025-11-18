@@ -54,7 +54,6 @@ def _gen_offsets_from_tac(code: List[TACOP])->Dict[str,int]:
         for v in func_vars[k]:
             func_offsets[k][v] = offset
             offset-=4
-
     return func_offsets
     
         
@@ -93,9 +92,10 @@ class MIPSCodeGenerator:
         functions_payload: List[Tuple[str, List[str], bool]] = []
 
         # 2) Generate body for each function
+        var_offsets = {}
         for func_name in self.pre.get_all_functions():
             func_tac, frame_info, liveness, _saved_regs = self.pre.get_function_info(func_name)
-            var_offsets = _gen_offsets_from_tac(func_tac)
+            var_offsets = {**var_offsets, **_gen_offsets_from_tac(func_tac)}
             ctx = FunctionCodegenContext(
                 name=func_name,
                 frame_info=frame_info,
@@ -116,7 +116,8 @@ class MIPSCodeGenerator:
             functions=functions_payload,
             data_section=self.pre.data_section,
             procedure_manager=self.proc_manager,
-            var_offsets=var_offsets[func_name]
+            var_offsets=var_offsets,
+            
         )
         return asm_text
 

@@ -8,5 +8,4 @@ function fib(n: integer): integer{
     }
 }
 
-let f = fib(10);
-print(f);
+print(fib(10));

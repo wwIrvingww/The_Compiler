@@ -93,8 +93,10 @@ class MIPSCodeGenerator:
 
         # 2) Generate body for each function
         var_offsets = {}
+        funcs_saved : Dict[str, set] = {}
         for func_name in self.pre.get_all_functions():
             func_tac, frame_info, liveness, _saved_regs = self.pre.get_function_info(func_name)
+            funcs_saved[func_name] = _saved_regs
             var_offsets = {**var_offsets, **_gen_offsets_from_tac(func_tac)}
             ctx = FunctionCodegenContext(
                 name=func_name,
@@ -117,6 +119,7 @@ class MIPSCodeGenerator:
             data_section=self.pre.data_section,
             procedure_manager=self.proc_manager,
             var_offsets=var_offsets,
+            funcs_saved = funcs_saved
             
         )
         return asm_text
@@ -300,10 +303,12 @@ class MIPSCodeGenerator:
     def _emit_load_param(self, ctx, tac, live_out):
         dest = tac.result
         param_idx = int(tac.arg1)
+        ofs = ctx.reg_alloc.var_offsets[dest]
         if param_idx < 4:
             dest_reg, pre1 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=True, for_write=False)
             ctx.body.extend(pre1)
             ctx.body.append(f"    move {dest_reg}, $a{param_idx}    # {dest_reg} = param[{param_idx}]")
+            ctx.body.append(f"    sw {dest_reg}, {ofs}($fp)")
             ctx.reg_alloc.mark_written(dest_reg)
         else:
             ctx.body.append(f"    # TODO: params >4 go with stack")    
@@ -497,7 +502,7 @@ class MIPSCodeGenerator:
             ctx.body.extend(pre_inst)
             
             # Final write
-            if mips_op == "%":
+            if mips_op == "mod":
                 ctx.body.append(f"    div {reg_dest}, $t8, $t9    # {dest} = {a}%{b}")
                 ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
                 ctx.reg_alloc.mark_written(reg_dest)
@@ -522,7 +527,7 @@ class MIPSCodeGenerator:
             ctx.body.extend(pre_inst)
             
             # Final write
-            if mips_op == "%":
+            if mips_op == "mod":
                 ctx.body.append(f"    div {reg_dest}, $t8, {b_reg}    # {dest} = {a}%{b}")
                 ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
                 ctx.reg_alloc.mark_written(reg_dest)
@@ -547,7 +552,7 @@ class MIPSCodeGenerator:
             ctx.body.extend(pre_inst)
             
             # Final write
-            if mips_op == "%":
+            if mips_op == "mod":
                 ctx.body.append(f"    div {reg_dest}, {a_reg}, $t8    # {dest} = {a}%{b}")
                 ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
                 ctx.reg_alloc.mark_written(reg_dest)
@@ -568,7 +573,7 @@ class MIPSCodeGenerator:
             pre_inst.extend(pre_dest)
             ctx.body.extend(pre_inst)
             
-            if mips_op == "%":
+            if mips_op == "mod":
                 ctx.body.append(f"    div {reg_dest}, {a_reg}, {b_reg}    # {dest} = {a}%{b}")
                 ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
                 ctx.reg_alloc.mark_written(reg_dest)

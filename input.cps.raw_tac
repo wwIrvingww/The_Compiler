@@ -35,6 +35,4 @@ t17,=,10,None
 t17,push_param,None,None
 t18,call,func_fib,None
 t19,=,t18,None
-f,=,t19,None
-t20,=,f,None
-None,print,t20,None
+None,print,t19,None

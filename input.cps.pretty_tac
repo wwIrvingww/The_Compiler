@@ -35,6 +35,4 @@ t17 = 10
 push_param t17
 t18 = call func_fib
 t19 = t18
-f = t19
-t20 = f
-print t20
+print t19

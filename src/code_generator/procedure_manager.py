@@ -6,7 +6,7 @@ Responsabilidad: Generar prólogos y epílogos de funciones en MIPS
 """
 
 import pprint
-from typing import List, Set, Optional
+from typing import Dict, List, Set, Optional
 from dataclasses import dataclass
 from symbol_table.runtime_layout import FrameManager
 
@@ -17,12 +17,15 @@ class FrameInfo:
     local_size: int = 0          # Bytes para variables locales
     param_count: int = 0         # Número de parámetros
     uses_saved_regs: Set[str] = None  # $s0-$s7 usados
+    param_offsets: Dict[str, int] = None
     max_call_args: int = 0       # Máximo args en llamadas internas
     most_negative_offset: int = 0
     fsize : int = 0
     def __post_init__(self):
         if self.uses_saved_regs is None:
             self.uses_saved_regs = set()
+        if self.param_offsets is None:
+            self.param_offsets = {}
     
     @property
     def saved_regs_size(self) -> int:
@@ -89,15 +92,18 @@ class ProcedureManager:
                     param_count = 0
                     fparams = frame.params
                     flocals = frame.locals
+                    
+                    t_param_off = {}
                     for sym_name, slot in fparams.items():
+                        t_param_off[sym_name] = slot[0]
                         param_count += 1
                     for sym_name, slot in flocals.items():
                         local_size+= slot[1]
                     
+                    frame_info.param_offsets = t_param_off
                     frame_info.local_size = local_size
                     frame_info.param_count = param_count
                     frame_info.fsize = local_size + (4*param_count)
-                    
                 self.frame_manager.exit_frame()
             except Exception as e:
                 print(e)
@@ -134,7 +140,11 @@ class ProcedureManager:
             
         code = []
         
-        eff_size = frame_info.fsize + 8 +abs(max_offset)# 8 por ra y fp
+        eff_size = (
+            8 +                     # ra and fp
+            frame_info.fsize +      # extra for locals/params
+            abs(max_offset)         # max possible spill
+        )#
         # Etiqueta de la función
         code.append(f"{func_name}:")
         code.append(f"    # === PRÓLOGO {func_name} ===")
@@ -149,27 +159,30 @@ class ProcedureManager:
         # code.append("    # Establecer nuevo frame pointer")
         code.append("    move $fp, $sp")
 
+        if frame_info.param_offsets:
+            code.append("    # === Save parameters to stack ===")
+            param_list = sorted(frame_info.param_offsets.items(), 
+                            key=lambda x: x[1])  # Sort by offset
+            
+            for i, (param_name, param_offset) in enumerate(param_list):
+                if i < 4:  # Only first 4 params come in $a0-$a3
+                    code.append(f"    sw $a{i}, {param_offset-4}($fp)    # Save {param_name}")
+
         if self.var_offsets:
             offs_for_func = self.var_offsets.get(func_name)
             if offs_for_func and "self" in offs_for_func:
                 self_off = offs_for_func["self"]
                 code.append(f"    sw $a0, {self_off}($fp)        # iniciar self en el frame")
-
-        # 3. Reservar espacio para locales + registros salvados
-        # total_space = frame_info.total_frame_size
-        # if total_space > 0:
-        #     code.append(f"    # Reservar espacio: {frame_info.local_size} bytes locales + {frame_info.saved_regs_size} bytes $s")
-        #     code.append(f"    addiu $sp, $sp, -{total_space}")
-        
+                
         # 4. Guardar registros $s0-$s7 si se usan
         if frame_info.uses_saved_regs:
             code.append("    # Guardar registros $s")
             saved_list = sorted(frame_info.uses_saved_regs)
-            offset = -frame_info.local_size  # Empezar después de locales
+            offset = 8  # Empezar después de locales
             
             for reg in saved_list:
-                code.append(f"    sw {reg}, {offset}($fp)")
-                offset -= 4
+                code.append(f"    sw {reg}, {offset}($sp)")
+                offset += 4
         
         code.append(f"    # === FIN PRÓLOGO {func_name} ===")
         code.append("")
@@ -208,14 +221,22 @@ class ProcedureManager:
         code.append(f"    # === EPÍLOGO {func_name} ===")
         
         # 1. Restaurar registros $s0-$s7 (en orden inverso)
+        
         if frame_info.uses_saved_regs:
-            code.append("    # Restaurar registros $s")
-            saved_list = sorted(frame_info.uses_saved_regs, reverse=True)
-            offset = -(frame_info.local_size + (len(saved_list) - 1) * 4)
+            code.append("    # Guardar registros $s")
+            saved_list = sorted(frame_info.uses_saved_regs)
+            saved_list =list(reversed(saved_list))
+            offset = 8 + 4*(len(saved_list)-1)  # Empezar después de locales
             
             for reg in saved_list:
-                code.append(f"    lw {reg}, {offset}($fp)")
-                offset += 4
+                code.append(f"    lw {reg}, {offset}($sp)")
+                offset -= 4
+        
+        # if frame_info.uses_saved_regs:
+        #     offset = 8
+        #     for reg in sorted(frame_info.uses_saved_regs):
+        #         code.append(f"    lw {reg}, {offset}($sp)")
+        #         offset += 4
         
         # 2. Liberar espacio de locales
         
@@ -226,7 +247,7 @@ class ProcedureManager:
         
         # 3. Restaurar $ra y $fp
         eff_size = frame_info.fsize + 8 + abs(max_offset)
-        # code.append("    # Restaurar $ra y $fp del caller")
+        code.append("    # Restaurar $ra y $fp del caller")
         code.append("    lw $fp, 4($sp)")
         code.append("    lw $ra, 0($sp)")
         code.append(f"    addiu $sp, $sp, {eff_size}")
@@ -248,7 +269,8 @@ class ProcedureManager:
         body_instructions: List[str],
         frame_info: Optional[FrameInfo] = None,
         has_return: bool = False,
-        var_offsets = None
+        var_offsets = None,
+        funcs_saved: Dict[str, set] = None
     ) -> List[str]:
         """
         Genera una función completa (prólogo + cuerpo + epílogo).
@@ -275,8 +297,12 @@ class ProcedureManager:
             for k in local_offsets.keys():
                 max_offset = min(max_offset, local_offsets[k]) 
 
-        
+        for r in funcs_saved[func_name]:
+            self.mark_saved_reg_usage(func_name, r)
+            # self.mark_saved_reg_usage(r)
         code.extend(self.generate_prologue(func_name, frame_info, max_offset))
+        
+        # parameters/locals
         
         # Cuerpo
         if body_instructions:
@@ -379,6 +405,7 @@ def generate_asm_file(
     data_section: List[str] = None,
     procedure_manager: ProcedureManager = None,
     var_offsets = None,
+    funcs_saved: Dict[str, set] = None
 ) -> str:
     """
     Genera un archivo .asm completo con múltiples funciones.
@@ -409,7 +436,7 @@ def generate_asm_file(
     # Funciones
     for func_name, body, has_return in functions:
         func_code = procedure_manager.generate_simple_function(
-            func_name, body, has_return=has_return, var_offsets=var_offsets
+            func_name, body, has_return=has_return, var_offsets=var_offsets, funcs_saved=funcs_saved
         )
         lines.extend(func_code)
         lines.append("")

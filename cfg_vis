@@ -6,7 +6,7 @@ digraph {
 	3 [label="Block 3\n10-10"]
 	4 [label="Block 4\n11-29\nLabels: L1"]
 	5 [label="Block 5\n30-30"]
-	6 [label="Block 6\n31-39\nLabels: L2"]
+	6 [label="Block 6\n31-37\nLabels: L2"]
 	0 -> 2
 	0 -> 1
 	1 -> 4

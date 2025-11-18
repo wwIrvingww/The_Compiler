@@ -116,7 +116,7 @@ class MIPSCodeGenerator:
             functions=functions_payload,
             data_section=self.pre.data_section,
             procedure_manager=self.proc_manager,
-            var_offsets=var_offsets
+            var_offsets=var_offsets[func_name]
         )
         return asm_text
 
@@ -304,7 +304,7 @@ class MIPSCodeGenerator:
     def _emit_create_array(self,ctx, tac, live_out):
         dest = tac.result
         
-        dest_reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
+        dest_reg, pre = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=False)
         ctx.body.extend(pre)
         
         ctx.body.append(f"\n    # == CREATE ARRAY ({dest}) == #")
@@ -332,12 +332,17 @@ class MIPSCodeGenerator:
         dest_addr = tac.result
         src = tac.arg1
         
-        src_reg, pre1 = ctx.reg_alloc.get_register_for(src, live_out, for_read=True, for_write=False)
-        dest_reg, pre2 = ctx.reg_alloc.get_register_for(dest_addr, live_out, for_read=False, for_write=True)
         
+        dest_reg, pre1 = ctx.reg_alloc.get_register_for(dest_addr, live_out, for_read=False, for_write=True)        
+        src_reg, pre2 = ctx.reg_alloc.get_register_for(src, live_out, for_read=True, for_write=False)
+
         ctx.body.extend(pre1)
         ctx.body.extend(pre2)
         ctx.body.append(f"    sw {src_reg}, 0({dest_reg})")
+        if(src_reg == dest_reg):
+            print(f"    sw {src_reg}, 0({dest_reg})")
+            raise("ERROR source is the same as dest???")
+            
         ctx.reg_alloc.mark_written(dest_reg)
         
     # ====================
@@ -395,46 +400,206 @@ class MIPSCodeGenerator:
         dest = tac.result
         if dest is None or a is None or b is None:
             return
-
-        op_map: Dict[str, str] = {
+                                
+        is_int_a = self._is_int_literal(a)
+        is_int_b = self._is_int_literal(b)
+        
+        # if not is_int_a:
+        #     reg_a, pre_a = ctx.reg_alloc.get_register_for(a, live_out, for_read=True, for_write=False)
+        #     pre_inst.extend(pre_a)
+        # else:
+        #     reg_a = None
+            
+        # if not is_int_b:
+        #     reg_b, pre_b = ctx.reg_alloc.get_register_for(b, live_out, for_read=True, for_write=False)
+        #     pre_inst.extend(pre_b)
+        # else:
+        #     reg_b = None
+        
+        
+        op_map = {
             "+": "add",
             "-": "sub",
             "*": "mul",
-            "/": "div",  # MARS acepta 'div rd, rs, rt' como pseudoinstrucción
+            "/": "div",
+            "%": "mod"
         }
         
-        if (op == "%"):
-            reg_a, pre1 = ctx.reg_alloc.get_register_for(a, live_out, for_read=True, for_write=False)
-            reg_b, pre2 = ctx.reg_alloc.get_register_for(b, live_out, for_read=True, for_write=False)
-            reg_dest, pre3 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
+        mips_op = op_map[op]
+        pre_inst = []
+        # print(a, b)
+        if is_int_a and is_int_b:
+            # Save a
+            ctx.body.append(
+                f"    li $t8, {a}"
+            )
+            # save b
+            ctx.body.append(
+                f"    li $t9, {b}"
+            )
+            
+            # result
+            reg_dest, pre_dest = ctx.reg_alloc.get_register_for(dest, live_out, for_read=True, for_write=False)
+            pre_inst.extend(pre_dest)
+            ctx.body.extend(pre_inst)
+            
+            # Final write
+            if mips_op == "%":
+                ctx.body.append(f"    div {reg_dest}, $t8, $t9    # {dest} = {a}%{b}")
+                ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
+                ctx.reg_alloc.mark_written(reg_dest)
+                return
 
-            ctx.body.extend(pre1)
-            ctx.body.extend(pre2)
-            ctx.body.extend(pre3)
-
-            ctx.body.append(f"    div {reg_dest}, {reg_a}, {reg_b}    # {a}%{b}")
-            ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
+            ctx.body.append(f"    {mips_op} {reg_dest}, $t8, $t9    # {dest} = {a} {op} {b}")
+            ctx.reg_alloc.mark_written(reg_dest)
+            return
+        elif is_int_a and not is_int_b:
+            # Save a
+            ctx.body.append(
+                f"    li $t8, {a}"
+            )
+            
+            # load b
+            b_reg, b_pre = ctx.reg_alloc.get_register_for(b, live_out, for_read=True, for_write=False)
+            pre_inst.extend(b_pre)
+            
+            # result
+            reg_dest, pre_dest = ctx.reg_alloc.get_register_for(dest, live_out, for_read=True, for_write=False)
+            pre_inst.extend(pre_dest)
+            ctx.body.extend(pre_inst)
+            
+            # Final write
+            if mips_op == "%":
+                ctx.body.append(f"    div {reg_dest}, $t8, {b_reg}    # {dest} = {a}%{b}")
+                ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
+                ctx.reg_alloc.mark_written(reg_dest)
+                return
+            ctx.body.append(f"    {mips_op} {reg_dest}, $t8, {b_reg}    # {dest} = {a} {op} {b}")
+            ctx.reg_alloc.mark_written(reg_dest)
+        
+            pass
+        elif is_int_b and not is_int_a:
+            # load a
+            a_reg, a_pre = ctx.reg_alloc.get_register_for(a, live_out, for_read=True, for_write=False)
+            pre_inst.extend(a_pre)
+            
+            # save b
+            ctx.body.append(
+                f"    li $t8, {b}"
+            )
+            
+            # result
+            reg_dest, pre_dest = ctx.reg_alloc.get_register_for(dest, live_out, for_read=True, for_write=False)
+            pre_inst.extend(pre_dest)
+            ctx.body.extend(pre_inst)
+            
+            # Final write
+            if mips_op == "%":
+                ctx.body.append(f"    div {reg_dest}, {a_reg}, $t8    # {dest} = {a}%{b}")
+                ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
+                ctx.reg_alloc.mark_written(reg_dest)
+                return
+            ctx.body.append(f"    {mips_op} {reg_dest}, {a_reg}, $t8    # {dest} = {a} {op} {b}")
+            ctx.reg_alloc.mark_written(reg_dest)
+        
+        else:
+            # a 
+            a_reg, a_pre = ctx.reg_alloc.get_register_for(a, live_out, for_read=True, for_write=False)
+            pre_inst.extend(a_pre)
+            
+            # b
+            b_reg, b_pre = ctx.reg_alloc.get_register_for(b, live_out, for_read=True, for_write=False)
+            pre_inst.extend(b_pre)
+            
+            reg_dest, pre_dest = ctx.reg_alloc.get_register_for(dest, live_out, for_read=True, for_write=False)
+            pre_inst.extend(pre_dest)
+            ctx.body.extend(pre_inst)
+            
+            if mips_op == "%":
+                ctx.body.append(f"    div {reg_dest}, {a_reg}, {b_reg}    # {dest} = {a}%{b}")
+                ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
+                ctx.reg_alloc.mark_written(reg_dest)
+                return
+            ctx.body.append(f"    {mips_op} {reg_dest}, {a_reg}, {b_reg}    # {dest} = {a} {op} {b}")
             ctx.reg_alloc.mark_written(reg_dest)
             return
             
-        mips_op = op_map[op]
+        # Sum, div
+        # if op in ("+", "-"):
+        #     # dest = a +- b
+        #     if is_int_b: # right is literal, a loaded
+        #         imm = int(b)
+        #         inst = "addi"
+        #         if op == "-":
+        #             imm = -imm
+        #         if reg_a is None:
+        #             tmp_reg, tmp_pre = get_temp(a)
+        #             ctx.body.extend(tmp_pre)
+        #             ctx.body.append(f"    li {tmp_reg}, {a}")
+        #             reg_a = tmp_reg
+        #         ctx.body.append(f"    {inst} {reg_dest}, {reg_a}, {imm}    # {dest} = {a} {op} {b}")
+        #         ctx.reg_alloc.mark_written(reg_dest)
+        #         return
+        #     elif is_int_a: # left is literal
+        #         imm = int(a)
+        #         if op == "+":  # On sum is commutative
+        #             if reg_b is None:
+        #                 tmp_reg, tmp_pre = get_temp(b)
+        #                 ctx.body.extend(tmp_pre)
+        #                 ctx.body.append(f"    li {tmp_reg}, {b}")
+        #                 reg_b = tmp_reg
+        #             ctx.body.append(f"    addi {reg_dest}, {reg_b}, {imm}    # {dest} = {a} {op} {b}")
+        #             ctx.reg_alloc.mark_written(reg_dest)
+        #             return
+        #         else: # on sub, we gotta preserve the order
+        #             tmp_reg, tmp_pre = get_temp(a)
+        #             ctx.body.extend(tmp_pre)
+        #             ctx.body.append(f"    li {tmp_reg}, {imm}")
+        #             ctx.body.append(f"    sub {reg_dest}, {tmp_reg}, {reg_b}    # {dest} = {a} - {b}")
+        #             ctx.reg_alloc.mark_written(reg_dest)
+        #             return
+        
+        # # mul 
+        # if op == "*" and (is_int_b or is_int_a):
+        #     # prefer reg * imm (we try to shift the register)
+        #     # find which side is the register and which is the immediate
+        #     if is_int_b and not is_int_a:
+        #         imm = int(b)
+        #         tmp_reg, tmp_pre = get_temp(b)
+        #         ctx.body.extend(tmp_pre)
+        #         ctx.body.append(f"    li {tmp_reg}, {imm}")
+        #         ctx.body.append(f"    mul {reg_dest}, {reg_a}, {tmp_reg}    # {dest} = {a} * {b}")
+        #         ctx.reg_alloc.mark_written(reg_dest)
+        #         return
+        #     elif is_int_a and not is_int_b:
+        #         imm = int(a)
+        #         tmp_reg, tmp_pre = get_temp(a)
+        #         ctx.body.extend(tmp_pre)
+        #         ctx.body.append(f"    li {tmp_reg}, {imm}")
+        #         ctx.body.append(f"    mul {reg_dest}, {reg_b}, {tmp_reg}    # {dest} = {a} * {b}")
+        #         ctx.reg_alloc.mark_written(reg_dest)
+        #         return
+        # # if (mips_op == "mod"):
+        # #     ctx.body.append(f"    div {reg_dest}, {reg_a}, {reg_b}    # {a}%{b}")
+        # #     ctx.body.append(f"    mfhi {reg_dest}    # (remainder)")
+        # #     ctx.reg_alloc.mark_written(reg_dest)
+        # #     return
+        # # ctx.body.append(f"    {mips_op} {reg_dest}, {reg_a}, {reg_b}    # {dest} = {a} {op} {b}")
+        # # ctx.reg_alloc.mark_written(reg_dest)
+        # if reg_a is None:
+        #     tmp_reg, tmp_pre = get_temp(a)
+        #     ctx.body.extend(tmp_pre)
+        #     ctx.body.append(f"    li {tmp_reg}, {a}")
+        #     reg_a = tmp_reg
+        # if reg_b is None:
+        #     tmp_reg, tmp_pre = get_temp(b)
+        #     ctx.body.extend(tmp_pre)
+        #     ctx.body.append(f"    li {tmp_reg}, {b}")
+        #     reg_b = tmp_reg
 
-        reg_a, pre1 = ctx.reg_alloc.get_register_for(a, live_out, for_read=True, for_write=False)
-        if (self._is_int_literal(a)):
-            pre1.append(f"    li {reg_a}, {a}")
-            
-        reg_b, pre2 = ctx.reg_alloc.get_register_for(b, live_out, for_read=True, for_write=False)
-        if (self._is_int_literal(b)):
-            pre2.append(f"    li {reg_b}, {b}")
-        reg_dest, pre3 = ctx.reg_alloc.get_register_for(dest, live_out, for_read=False, for_write=True)
-
-        ctx.body.extend(pre1)
-        ctx.body.extend(pre2)
-        ctx.body.extend(pre3)
-
-        ctx.body.append(f"    {mips_op} {reg_dest}, {reg_a}, {reg_b}    # {dest} = {a} {op} {b}")
-        ctx.reg_alloc.mark_written(reg_dest)
-
+        # # Now emit generic register-register op ("add","sub","mul")
+        # ctx.body.append(f"    {op_map[op]} {reg_dest}, {reg_a}, {reg_b}    # {dest} = {a} {op} {b}")
+        # ctx.reg_alloc.mark_written(reg_dest)
     def _emit_relop(self, ctx: FunctionCodegenContext, tac: TACOP, live_out: Set[str]) -> None:
         op = tac.op
         a = tac.arg1

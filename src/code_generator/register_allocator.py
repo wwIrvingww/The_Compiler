@@ -90,6 +90,7 @@ class RegisterAllocator:
     def __init__(
         self,
         available_registers: Optional[List[str]] = None,
+        scratch_registers: Optional[List[str]] = None,
         base_pointer: str = "$fp",
         var_offsets: Optional[Dict[str, int]] = None,
     ) -> None:
@@ -97,16 +98,23 @@ class RegisterAllocator:
         if available_registers is None:
             # Conjunto típico de registros temporales + de salvado
             available_registers = [
-                "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7", "$t8", "$t9",
+                "$t0", "$t1", "$t2", "$t3", "$t4", "$t5", "$t6", "$t7",
                 "$s0", "$s1", "$s2", "$s3", "$s4", "$s5", "$s6", "$s7",
             ]
-
+        if not scratch_registers:
+            scratch_registers = [
+                "$t8", "$t9"
+            ]
         self.base_pointer: str = base_pointer
         self.var_offsets: Dict[str, int] = var_offsets.copy() if var_offsets else {}
 
         # RegisterDescriptor: reg_name -> RegisterState
         self.registers: Dict[str, RegisterState] = {
             r: RegisterState(name=r) for r in available_registers
+        }
+        
+        self.scratch_registers : Dict[str, RegisterState] = {
+            r: RegisterState(name=r) for r in scratch_registers
         }
 
         # AddressDescriptor: var_name -> set("mem" or reg_name)
@@ -133,6 +141,16 @@ class RegisterAllocator:
         if var_name not in self.address:
             self.address[var_name] = set()
 
+    def _free_scratch_reg(self, reg_name: str) -> None:
+        reg = self.scratch_registers[reg_name]
+        if reg.var is not None:
+            # Quitar registro de la AddressDescriptor de la variable
+            locs = self.scratch_registers.get(reg.var)
+            if locs is not None and reg_name in locs:
+                locs.remove(reg_name)
+        reg.var = None
+        reg.dirty = False
+        
     def _free_register(self, reg_name: str) -> None:
         reg = self.registers[reg_name]
         if reg.var is not None:
@@ -237,10 +255,15 @@ class RegisterAllocator:
         """
         self._ensure_var_entry(var_name)
         code: List[str] = []
-
         # 1) Si ya está en algún registro, reutilizarlo
         for reg_name, reg_state in self.registers.items():
             if reg_state.var == var_name:
+                if for_read and "mem" in self.address[var_name]:
+                    offset = self.var_offsets.get(var_name)
+                    if offset is not None:
+                        code.append(
+                        f"    lw {reg_name}, {offset}({self.base_pointer})    # reload {var_name}"
+                    )
                 # Si necesitamos leer y no hay constancia de que esté en memoria,
                 # no pasa nada: asumimos que el valor en el registro es correcto.
                 return reg_name, code
@@ -260,7 +283,6 @@ class RegisterAllocator:
 
         # 4) En este punto, free_reg está libre
         reg_state = self.registers[free_reg]
-        self._free_register(free_reg)  # por si acaso
         reg_state.var = var_name
         reg_state.dirty = False
 

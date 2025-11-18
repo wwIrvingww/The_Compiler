@@ -256,14 +256,14 @@ class ProcedureManager:
         Returns:
             Lista completa de instrucciones MIPS
         """
+        
         code = []
-        # Prólogo
+        max_offset = 0
         if (var_offsets):
-            offs = var_offsets[func_name]
-            
-            max_offset = 0
-            for k in offs.keys():
-                max_offset = min(max_offset, offs[k])  
+            for k in var_offsets.keys():
+                max_offset = min(max_offset, var_offsets[k]) 
+                
+             
         code.extend(self.generate_prologue(func_name, frame_info, max_offset))
         
         # Cuerpo

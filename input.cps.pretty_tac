@@ -1,40 +1,105 @@
 FN func_main
 CREATE_ARRAY t0
-t1 = 13
+t1 = 1
 t2 = 1 * 4
 t3 = t0 + t2
 *t3 store t1 	# t0[1] = t1
-t4 = 67
+t4 = 3
 t5 = 2 * 4
 t6 = t0 + t5
 *t6 store t4 	# t0[2] = t4
-t7 = 42
+t7 = 51
 t8 = 3 * 4
 t9 = t0 + t8
 *t9 store t7 	# t0[3] = t7
-*t0 store 3 	# len(t0) = 3
+t10 = 76
+t11 = 4 * 4
+t12 = t0 + t11
+*t12 store t10 	# t0[4] = t10
+t13 = 182
+t14 = 5 * 4
+t15 = t0 + t14
+*t15 store t13 	# t0[5] = t13
+t16 = 7
+t17 = 6 * 4
+t18 = t0 + t17
+*t18 store t16 	# t0[6] = t16
+*t0 store 6 	# len(t0) = 6
 arr = t0
-t10 = 0
-i = t10
+t19 = 0
+i = t19
 label L0
-t11 = i
-t12 = 4
-t13 = t11 < t12
-if t13 goto L1
+t20 = i
+t21 = 6
+t22 = t20 < t21
+if t22 goto L1
 goto L3
 label L1
-t17 = i
-t19 = t17 + 1
-t20 = t19 * 4
-t21 = arr + t20
-t18 load *t21
-t22 = t18
-print t22
+t26 = i
+t28 = t26 + 1
+t29 = t28 * 4
+t30 = arr + t29
+t27 load *t30
+t31 = t27
+print t31
+t32 = ", "
+None = t32 print_s
 goto L2
 label L2
-t14 = i
-t15 = 1
-t16 = t14 + t15
-i = t16
+t23 = i
+t24 = 1
+t25 = t23 + t24
+i = t25
 goto L0
 label L3
+t33 = "\nAfter:\n"
+None = t33 print_s
+t34 = 0
+j = t34
+label L4
+t35 = j
+t36 = 6
+t37 = t35 < t36
+if t37 goto L5
+goto L7
+label L5
+t41 = j
+t42 = t41 + 1
+t43 = j
+t44 = t42 * 4
+t45 = arr + t44
+*t45 store t43 	# arr[t42] = t43
+goto L6
+label L6
+t38 = j
+t39 = 1
+t40 = t38 + t39
+j = t40
+goto L4
+label L7
+t46 = 0
+k = t46
+label L8
+t47 = k
+t48 = 6
+t49 = t47 < t48
+if t49 goto L9
+goto L11
+label L9
+t53 = k
+t55 = t53 + 1
+t56 = t55 * 4
+t57 = arr + t56
+t54 load *t57
+t58 = t54
+print t58
+t59 = ", "
+None = t59 print_s
+goto L10
+label L10
+t50 = k
+t51 = 1
+t52 = t50 + t51
+k = t52
+goto L8
+label L11

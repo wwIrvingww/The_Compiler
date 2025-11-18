@@ -15,12 +15,12 @@
     "menus": {
       "editor/title": [
         {
-          "command": "cps.genPTAC",
+          "command": "cps.generateQuadrupletTac",
           "when": "editorLangId == cps",
           "group": "navigation"
         },
         {
-          "command": "cps.genQTAC",
+          "command": "cps.generateAssembly",
           "when": "editorLangId == cps",
           "group": "navigation"
         }
@@ -48,24 +48,12 @@
     ],
     "commands": [
       {
-        "command": "mylang.generateQuadrupletTac",
-        "title": "Generate Quadruplet TAC"
+        "command": "cps.generateQuadrupletTac",
+        "title": "TAC Compile"
       },
       {
-        "command": "mylang.generatePrettyTac",
-        "title": "Generate Pretty TAC"
-      },
-      {
-        "command": "mylang.generateAssembly",
-        "title": "Generate Assembly (stub)"
-      },
-      {
-        "command": "cps.genPTAC",
-        "title": "Generate Pretty TAC"
-      },
-      {
-        "command": "cps.genQTAC",
-        "title": "Generate Quadruplet TAC"
+        "command": "cps.generateAssembly",
+        "title": "ASM/MIPS Compile"
       }
     ]
   },

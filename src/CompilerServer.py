@@ -10,6 +10,7 @@ from parser.CompiscriptLexer import CompiscriptLexer
 from parser.CompiscriptParser import CompiscriptParser
 from semantic.ast_and_semantic import AstAndSemantic
 from intermediate.tac_generator import TacGenerator
+from code_generator.mips_generator import MIPSCodeGenerator
 
 
 app = FastAPI()
@@ -35,8 +36,48 @@ class ErrorCollector(ErrorListener):
     def syntaxError(self, recognizer, offendingSymbol, line, column, msg, e):
         self.errors.append(f"[Line {line}] {msg}")
 
+def compile_asm_driver(
+    code: str
+)->str:
+    # Lexic/Syntax
+    input_stream = InputStream(code)
+    lexer = CompiscriptLexer(input_stream)
+    lexer_error_listener = ErrorCollector()
+    lexer.removeErrorListeners()
+    lexer.addErrorListener(lexer_error_listener)
+    
+    ## 2. Semantic Analysis
+    stream = CommonTokenStream(lexer)
+    parser = CompiscriptParser(stream)
+    parser_error_listener = ErrorCollector()
+    parser.removeErrorListeners()
+    parser.addErrorListener(parser_error_listener)
 
-def compile_driver(
+    tree = parser.program()
+
+    # 1) Análisis semántico (listeners)
+    walker = ParseTreeWalker()
+    sem_listener = AstAndSemantic()
+    walker.walk(sem_listener, tree)
+
+    all_errors = lexer_error_listener.errors + parser_error_listener.errors + sem_listener.errors
+    if all_errors:
+        return OutputCode(result="== ERRORS ==", errors=all_errors)
+    
+    tac_gen = TacGenerator(sem_listener.table, sem_listener.resolved_symbols)
+    tac_gen.visit(tree)
+    
+    mips_gen = MIPSCodeGenerator(
+        tac_gen.code, tac_gen.frame_manager
+    )
+
+    try:
+        asm_str = mips_gen.generate()
+        return OutputCode(result=str(asm_str), errors=[])
+    except Exception as e:
+        return OutputCode(result="", errors=[e])
+    
+def compile_tac_driver(
     code:str,
     mode:str
     ) -> OutputCode:
@@ -64,10 +105,9 @@ def compile_driver(
 
     all_errors = lexer_error_listener.errors + parser_error_listener.errors + sem_listener.errors
     if all_errors:
-        
         return OutputCode(result="== ERRORS ==", errors=all_errors)
     
-    tac_gen = TacGenerator(sem_listener.table)
+    tac_gen = TacGenerator(sem_listener.table, sem_listener.resolved_symbols)
     tac_gen.visit(tree)
     
     if mode=="pretty":
@@ -133,13 +173,20 @@ def test(payload: InputCode):
 @app.post("/tac/pretty", response_model=OutputCode)
 def generate_tac_pretty(payload: InputCode):
     try: 
-        return compile_driver(payload.source, mode="pretty")
+        return compile_tac_driver(payload.source, mode="pretty")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/tac/quadruplet", response_model=OutputCode)
 def generate_tac_pretty(payload: InputCode):
     try: 
-        return compile_driver(payload.source, mode="raw")
+        return compile_tac_driver(payload.source, mode="raw")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/asm", response_model=OutputCode)
+def generate_tac_pretty(payload: InputCode):
+    try: 
+        return compile_asm_driver(payload.source)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -38,6 +38,7 @@ exports.deactivate = deactivate;
 // The module 'vscode' contains the VS Code extensibility API
 // Import the module and reference it with the alias vscode in your code below
 const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
 const outputChannel = vscode.window.createOutputChannel('CompiScript TAC');
 let tacPanel;
 // This method is called when your extension is activated
@@ -46,10 +47,9 @@ function activate(context) {
     const diagnostics = vscode.languages.createDiagnosticCollection('cps');
     context.subscriptions.push(diagnostics);
     vscode.workspace.onDidSaveTextDocument(doc => runDiagnostics(doc, diagnostics));
-    context.subscriptions.push(vscode.commands.registerCommand('mylang.generateQuadrupletTac', () => runGenerator('quadruplet')));
-    context.subscriptions.push(vscode.commands.registerCommand('mylang.generatePrettyTac', () => runGenerator('pretty')));
     context.subscriptions.push(vscode.commands.registerCommand('cps.genPTAC', () => runGeneratorWebView('pretty')));
-    context.subscriptions.push(vscode.commands.registerCommand('cps.genQTAC', () => runGeneratorWebView('quadruplet')));
+    context.subscriptions.push(vscode.commands.registerCommand('cps.generateQuadrupletTac', () => runGeneratorWebView('quadruplet')));
+    context.subscriptions.push(vscode.commands.registerCommand('cps.generateAssembly', () => runAsmGenerator()));
 }
 function highlightQuad(tac) {
     const lines = tac.split("\n");
@@ -202,7 +202,7 @@ async function runGeneratorWebView(mode) {
         vscode.window.showErrorMessage(`Error: ${err}`);
     }
 }
-async function runGenerator(mode) {
+async function runAsmGenerator() {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
         vscode.window.showInformationMessage('No active editor');
@@ -214,8 +214,7 @@ async function runGenerator(mode) {
         return;
     }
     try {
-        const endpoint = mode === 'quadruplet' ? '/tac/quadruplet' : '/tac/pretty';
-        const resp = await fetch(`http://localhost:8000${endpoint}`, {
+        const resp = await fetch(`http://localhost:8000/asm`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ source: doc.getText() }),
@@ -226,11 +225,17 @@ async function runGenerator(mode) {
             return;
         }
         const data = await resp.json();
-        outputChannel.clear();
-        outputChannel.appendLine(`=== ${mode.toUpperCase()} GENERATION ===`);
-        outputChannel.appendLine(data.result);
-        outputChannel.show(true);
-        vscode.window.showInformationMessage(`${mode} generation complete.`);
+        // --------- Open temporary unsaved editor with result ----------
+        // (Optional) derive a name: "original.asm"
+        const base = path.parse(doc.uri.fsPath).name;
+        const displayName = base + ".asm";
+        const asmDoc = await vscode.workspace.openTextDocument({
+            language: "asm",
+            content: data.result,
+        });
+        const editor = await vscode.window.showTextDocument(asmDoc, { preview: false });
+        // VS Code does not let you set the tab title directly,
+        // but the language + unsaved status is usually enough.
     }
     catch (err) {
         vscode.window.showErrorMessage(`Error: ${err}`);

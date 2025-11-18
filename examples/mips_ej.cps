@@ -57,3 +57,43 @@ let l = len(arr);
 for (let i = 0; i< l, i = i +1){
     print(arr[i]);
 }
+
+// # ========================
+// #    5. recursive/ complex
+// # ========================
+
+function fib(n: integer): integer{
+    if (n <= 1){
+        return 1;
+    } else{
+        let a = fib(n-1);
+        let b = fib(n-2);
+        return a + b;
+    }
+}
+
+function square(n: integer): integer{
+    return n * n;
+}
+
+function is_even(n:integer): integer{
+    return n%2;
+}
+
+for (let i = 0; i< 10; i = i +1){
+    let f = fib(i);
+    let sq = square(i);
+    let ev = is_even(i);
+    print(i);
+    print(":\n fib -> ");
+    print(f);
+    print("\n sq -> ");
+    print(sq);
+    print("\n is even -> ");
+    if (ev == 0){
+        print("NO");
+    } else{
+        print("YES");
+    }
+    print("\n");
+}
